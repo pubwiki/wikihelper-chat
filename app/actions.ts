@@ -1,9 +1,13 @@
 "use server";
 
-import { groq } from "@ai-sdk/groq";
-import { openai } from "@ai-sdk/openai";
+import { createQwen } from "qwen-ai-provider";
 import { generateObject } from "ai";
 import { z } from "zod";
+
+const qwenClient = createQwen({
+  apiKey: process.env.DASHSCOPE_API_KEY,
+  baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+});
 
 // Helper to extract text content from a message regardless of format
 function getMessageText(message: any): string {
@@ -53,7 +57,7 @@ export async function generateTitle(messages: any[]): Promise<string> {
     }
 
     const { object: titleObject } = await generateObject({
-      model: groq('llama-3.1-8b-instant'),
+      model: qwenClient('qwen-flash'),
       schema: z.object({
         title: z.string().describe("A short, descriptive title for the conversation"),
       }),
