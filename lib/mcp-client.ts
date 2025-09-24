@@ -1,5 +1,6 @@
 import { experimental_createMCPClient as createMCPClient } from 'ai';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 export interface KeyValuePair {
   key: string;

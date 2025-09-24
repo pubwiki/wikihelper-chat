@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useRef } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@/lib/hooks/use-local-storage";
+import { getBuiltInServers } from "./built-in-servers";
 
 export interface KeyValuePair {
   key: string;
@@ -39,6 +40,8 @@ export interface MCPServer {
   status?: ServerStatus;
   errorMessage?: string;
   tools?: MCPTool[];
+  builtIn?: boolean; // Indicates if the server is a built-in option
+  onFetchHeader?:()=>KeyValuePair[],
 }
 
 export interface MCPServerApi {
@@ -61,6 +64,8 @@ interface MCPContextType {
     errorMessage?: string
   ) => void;
   getActiveServersForApi: () => MCPServerApi[];
+  pubwikiCookies:string[],
+  setPubwikiCookies: (cookies:string[]) => void
 }
 
 const MCPContext = createContext<MCPContextType | undefined>(undefined);
@@ -91,14 +96,34 @@ async function checkServerHealth(
 }
 
 export function MCPProvider({ children }: { children: React.ReactNode }) {
+  const builtInServers = getBuiltInServers();
+  const builtInServersId = builtInServers.map(s=>s.id);
   const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
     STORAGE_KEYS.MCP_SERVERS,
-    []
+    [],
+    (s)=>{
+      return s.filter((ss)=>!builtInServersId.includes(ss.id)).filter((ss)=>!ss.builtIn).concat(
+        builtInServers.map((bs)=>{
+          const find = s.find((server) => server.id === bs.id)
+          if(find){
+            return {
+              ...bs,
+              status:find.status,
+              tools:find.tools
+            }
+          }
+          return bs
+        }
+      ))
+    }
   );
-
+  const [pubwikiCookies, setPubwikiCookies] = useState<string[]>([]);
   const [selectedMcpServers, setSelectedMcpServers] = useLocalStorage<string[]>(
     STORAGE_KEYS.SELECTED_MCP_SERVERS,
-    []
+    [],
+    (s)=>{
+      return s.filter((id) => !s.includes(id)).concat(builtInServersId)
+    }
   );
 
   // Create a ref to track active servers and avoid unnecessary re-renders
@@ -150,7 +175,7 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
       .map((server) => ({
         type: server.type,
         url: server.url,
-        headers: server.headers,
+        headers: server.id==="wiki-helper"?server.headers?.concat([{key:"reqcookie",value:pubwikiCookies.join("; ")}]):server.headers,
       }));
   };
 
@@ -233,10 +258,34 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
 
   // Calculate mcpServersForApi based on current state
   const mcpServersForApi = getActiveServersForApi();
+  
+  const initializedRef = useRef(false);
+  
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    if (mcpServers.length === 0) return; 
+
+    initializedRef.current = true;
+
+    const init = async () => {
+      for (const sid of builtInServersId) {
+        const server = getServerById(sid);
+        console.log(mcpServers)
+        if (server) {
+          await startServer(sid);
+        }
+      }
+    };
+
+    init();
+  }, [mcpServers]);
 
   return (
     <MCPContext.Provider
       value={{
+        pubwikiCookies,
+        setPubwikiCookies,
         mcpServers,
         setMcpServers,
         selectedMcpServers,

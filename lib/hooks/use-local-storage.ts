@@ -6,9 +6,10 @@ type SetValue<T> = T | ((val: T) => T);
  * Custom hook for persistent localStorage state with SSR support
  * @param key The localStorage key
  * @param initialValue The initial value if no value exists in localStorage
+ * @param preprocess preprocess when get item
  * @returns A stateful value and a function to update it
  */
-export function useLocalStorage<T>(key: string, initialValue: T) {
+export function useLocalStorage<T>(key: string, initialValue: T, preprocess?: (value: T)=>T) {
   // State to store our value
   // Pass initial state function to useState so logic is only executed once
   const [storedValue, setStoredValue] = useState<T>(initialValue);
@@ -23,7 +24,9 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     try {
       const item = window.localStorage.getItem(key);
       if (item) {
-        setStoredValue(parseJSON(item));
+        setStoredValue(preprocess ? preprocess(parseJSON(item)) : parseJSON(item));
+      }else{
+        setStoredValue(preprocess ? preprocess(initialValue) : initialValue);
       }
     } catch (error) {
       console.error(`Error reading localStorage key "${key}":`, error);

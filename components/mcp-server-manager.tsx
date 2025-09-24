@@ -661,6 +661,9 @@ export const MCPServerManager = ({
                       .sort((a, b) => {
                         const aActive = selectedServers.includes(a.id);
                         const bActive = selectedServers.includes(b.id);
+                        if(a.builtIn){
+                          return -99;
+                        }
                         if (aActive && !bActive) return -1;
                         if (!aActive && bActive) return 1;
                         return 0;
@@ -708,6 +711,12 @@ export const MCPServerManager = ({
                                     ? "SSE"
                                     : "HTTP"}
                                 </span>
+
+                                  {server.builtIn && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                                      Bulit-In
+                                    </span>
+                                  )}
 
                                 {/* Status indicator */}
                                 <StatusIndicator
@@ -758,31 +767,40 @@ export const MCPServerManager = ({
                                     />
                                   </button>
 
-                                  <button
-                                    onClick={(e) => removeServer(server.id, e)}
-                                    className="p-1 rounded-full hover:bg-muted/70"
-                                    aria-label="Remove server"
-                                    title="Remove server"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </button>
+                                  {!server.builtIn && (
+                                    <button
+                                      onClick={(e) =>
+                                        removeServer(server.id, e)
+                                      }
+                                      className="p-1 rounded-full hover:bg-muted/70"
+                                      aria-label="Remove server"
+                                      title="Remove server"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </button>
+                                  )}
 
-                                  <button
-                                    onClick={() => startEditing(server)}
-                                    className="p-1 rounded-full hover:bg-muted/50"
-                                    aria-label="Edit server"
-                                    title="Edit server"
-                                  >
-                                    <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </button>
+                                  {!server.builtIn && (
+                                    <button
+                                      onClick={() => startEditing(server)}
+                                      className="p-1 rounded-full hover:bg-muted/50"
+                                      aria-label="Edit server"
+                                      title="Edit server"
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </button>
+                                  )}
+
                                 </div>
                               </div>
                             </div>
 
                             {/* Server Details */}
+                            {(!server.builtIn)&&(
                             <p className="text-xs text-muted-foreground mb-2.5 truncate">
                               {getServerDisplayUrl(server)}
                             </p>
+                            )}
 
                             {/* Tools List */}
                             {server.status === "connected" && (
@@ -792,7 +810,10 @@ export const MCPServerManager = ({
                             )}
 
                             {/* Action Button */}
-                            <Button
+                            {
+                              (!server.builtIn)&&
+                              (
+                              <Button
                               size="sm"
                               className="w-full gap-1.5 hover:text-black hover:dark:text-white rounded-lg"
                               variant={isActive ? "default" : "outline"}
@@ -803,6 +824,8 @@ export const MCPServerManager = ({
                               )}
                               {isActive ? "Active" : "Enable Server"}
                             </Button>
+                            )
+                            }
                           </div>
                         );
                       })}

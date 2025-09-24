@@ -35,7 +35,7 @@ export default function Chat() {
   const [generatedChatId, setGeneratedChatId] = useState<string>('');
   
   // Get MCP server data from context
-  const { mcpServersForApi } = useMCP();
+  const { getActiveServersForApi } = useMCP();
   
   // Initialize userId
   useEffect(() => {
@@ -101,7 +101,10 @@ export default function Chat() {
       parts: msg.parts,
     } as Message));
   }, [chatData]);
-  
+
+  const servers = getActiveServersForApi();
+
+
   const { messages, input, handleInputChange, handleSubmit, status, stop } =
     useChat({
       id: chatId || generatedChatId, // Use generated ID if no chatId in URL
@@ -109,7 +112,7 @@ export default function Chat() {
       maxSteps: 20,
       body: {
         selectedModel,
-        mcpServers: mcpServersForApi,
+        mcpServers: servers,
         chatId: chatId || generatedChatId, // Use generated ID if no chatId in URL
         userId,
       },
@@ -120,10 +123,14 @@ export default function Chat() {
           queryClient.invalidateQueries({ queryKey: ['chats', userId] });
         }
       },
+      onToolCall: ({toolCall})=>{
+
+      },
       onError: (error) => {
+        console.log(error)
         toast.error(
           error.message.length > 0
-            ? error.message
+            ? "Error on UseChat:"+error.message
             : "An error occured, please try again later.",
           { position: "top-center", richColors: true },
         );

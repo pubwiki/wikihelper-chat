@@ -73,8 +73,13 @@ export function ChatSidebar() {
   const [apiKeySettingsOpen, setApiKeySettingsOpen] = useState(false);
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const [editUserIdOpen, setEditUserIdOpen] = useState(false);
-  const [newUserId, setNewUserId] = useState("");
+
+  //Login logic
+  const [loginOpen, setLoginOpen] = useState(true);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
 
   // Get MCP server data from context
   const {
@@ -82,7 +87,43 @@ export function ChatSidebar() {
     setMcpServers,
     selectedMcpServers,
     setSelectedMcpServers,
+    setPubwikiCookies
   } = useMCP();
+
+  const handleLogin = async () => {
+    setLoginLoading(true);
+    setLoginError("");
+
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setLoginError(data.message || "登录失败");
+        return;
+      }
+
+      setPubwikiCookies(data.cookies);
+      const newUserId = data.userkey.trim()
+      const oldUserId = getUserId()
+
+      if(oldUserId!=newUserId){
+        updateUserId(newUserId);
+        setUserId(newUserId);
+        toast.success("User ID updated successfully");
+      }
+      setLoginOpen(false);
+    } catch (err) {
+      setLoginError("请求出错，请稍后再试");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
 
   // Initialize userId
   useEffect(() => {
@@ -113,21 +154,6 @@ export function ChatSidebar() {
   // Get active MCP servers status
   const activeServersCount = selectedMcpServers.length;
 
-  // Handle user ID update
-  const handleUpdateUserId = () => {
-    if (!newUserId.trim()) {
-      toast.error("User ID cannot be empty");
-      return;
-    }
-
-    updateUserId(newUserId.trim());
-    setUserId(newUserId.trim());
-    setEditUserIdOpen(false);
-    toast.success("User ID updated successfully");
-
-    // Refresh the page to reload chats with new user ID
-    window.location.reload();
-  };
 
   // Show loading state if user ID is not yet initialized
   if (!userId) {
@@ -186,7 +212,7 @@ export function ChatSidebar() {
             </div>
             {!isCollapsed && (
               <div className="font-semibold text-lg text-foreground/90">
-                MCP
+                Pubwiki Chat
               </div>
             )}
           </div>
@@ -453,15 +479,6 @@ export function ChatSidebar() {
                   <Copy className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
                   Copy User ID
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setEditUserIdOpen(true);
-                  }}
-                >
-                  <Pencil className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
-                  Edit User ID
-                </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
@@ -522,38 +539,54 @@ export function ChatSidebar() {
       </SidebarFooter>
 
       <Dialog
-        open={editUserIdOpen}
+        open={loginOpen}
         onOpenChange={(open) => {
-          setEditUserIdOpen(open);
-          if (open) {
-            setNewUserId(userId);
+          setLoginOpen(open);
+          if (!open) {
+            setUsername("");
+            setPassword("");
+            setLoginError("");
           }
         }}
       >
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[400px]"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>Edit User ID</DialogTitle>
+            <DialogTitle>Login</DialogTitle>
             <DialogDescription>
-              Update your user ID for chat synchronization. This will affect
-              which chats are visible to you.
+              Please enter your credentials to access your account.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="userId">User ID</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="userId"
-                value={newUserId}
-                onChange={(e) => setNewUserId(e.target.value)}
-                placeholder="Enter your user ID"
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your username"
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+              />
+            </div>
+
+            {loginError && (
+              <p className="text-sm text-red-500 font-medium">{loginError}</p>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditUserIdOpen(false)}>
-              Cancel
+            <Button onClick={handleLogin} disabled={loginLoading}>
+              {loginLoading ? "Logging in..." : "Login"}
             </Button>
-            <Button onClick={handleUpdateUserId}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
