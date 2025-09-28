@@ -169,6 +169,24 @@ const PurePreviewMessage = ({
       >
         <div className="flex flex-col w-full space-y-3">
           {message.parts?.map((part, i) => {
+            
+            if (message.role === "system" && part.type === "text") {
+              return (
+                <div
+                  key={`message-${message.id}-system-${i}`}
+                  className={cn(
+                    "flex items-center w-fit text-xs",
+                    "text-muted-foreground/70 italic tracking-tight",
+                    "px-3 py-1.5 rounded-md",
+                    "border border-border/40 bg-gradient-to-b from-background to-muted/20 backdrop-blur-sm"
+                  )}
+                >
+                  {part.text}
+                </div>
+              );
+            }
+
+
             switch (part.type) {
               case "text":
                 return (

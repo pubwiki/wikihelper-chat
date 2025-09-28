@@ -1,6 +1,6 @@
 import { type MCPServer } from "./mcp-context";
 
-function buildWikiHelper(): MCPServer {
+export function buildWikiHelper(): MCPServer {
   return {
     id: "wiki-helper",
     name: "Wiki Helper",
@@ -16,7 +16,7 @@ function buildExaSearch(): MCPServer {
   return {
     id: "exa-search",
     name: "Exa Search",
-    url: `https://mcp.exa.ai/mcp?exaApiKey=5883298f-b472-450a-a75f-357033c3d0c8`,
+    url: `http://192.168.31.227:8081/mcp`,
     type: "http",
     description: "Search Engine made for AIs by Exa",
     builtIn: true,
