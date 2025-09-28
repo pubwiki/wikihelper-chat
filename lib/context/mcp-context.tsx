@@ -50,6 +50,23 @@ export interface MCPServerApi {
   headers?: KeyValuePair[];
 }
 
+
+
+export interface CreateWikiArgs {
+  name: string;
+  slug: string;
+  language: string;
+}
+
+export interface ChangeWikiPageArgs {
+  source: string; // wikitext source
+  title: string; // page title
+  comment?: string; // edit comment
+  type:"create" | "update";
+}
+
+export type UserOptionBtn = {title:string,action:string}
+
 interface MCPContextType {
   mcpServers: MCPServer[];
   setMcpServers: (servers: MCPServer[]) => void;
@@ -65,7 +82,21 @@ interface MCPContextType {
   ) => void;
   getActiveServersForApi: () => MCPServerApi[];
   pubwikiCookies:string[],
-  setPubwikiCookies: (cookies:string[]) => void
+  setPubwikiCookies: (cookies:string[]) => void,
+  userOptions: UserOptionBtn[],
+  setUserOptions: (opts:UserOptionBtn[]) => void,
+  createWikiStatus: { args: CreateWikiArgs; status: string } | undefined;
+  pendingChangePageToolCall: null | {
+    type: "create" | "update";
+    args: ChangeWikiPageArgs;
+  };
+  setCreateWikiStatus: (value: { args: CreateWikiArgs; status: string } | undefined) => void;
+  setPendingChangePageToolCall: (value: null | {
+    type: "create" | "update";
+    args: ChangeWikiPageArgs;
+  }) => void;
+  pendingChangePageHTML:string,
+  setPendingChangePageHTML:(html:string)=>void
 }
 
 const MCPContext = createContext<MCPContextType | undefined>(undefined);
@@ -118,6 +149,17 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
     }
   );
   const [pubwikiCookies, setPubwikiCookies] = useState<string[]>([]);
+  const [userOptions,setUserOptions] = useState<UserOptionBtn[]>([]);
+  const [createWikiStatus, setCreateWikiStatus] = useState<
+    { args: CreateWikiArgs; status: string } | undefined
+  >(undefined);
+  const [pendingChangePageToolCall, setPendingChangePageToolCall] = useState<null | {
+    type: "create" | "update";
+    args: ChangeWikiPageArgs;
+  }>(null);
+
+  const [pendingChangePageHTML,setPendingChangePageHTML] = useState<string>("");
+
   const [selectedMcpServers, setSelectedMcpServers] = useLocalStorage<string[]>(
     STORAGE_KEYS.SELECTED_MCP_SERVERS,
     [],
@@ -175,7 +217,7 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
       .map((server) => ({
         type: server.type,
         url: server.url,
-        headers: server.id==="wiki-helper"?server.headers?.concat([{key:"reqcookie",value:pubwikiCookies.join("; ")}]):server.headers,
+        headers: server.headers,
       }));
   };
 
@@ -295,6 +337,14 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
         stopServer,
         updateServerStatus,
         getActiveServersForApi,
+        userOptions,
+        setUserOptions,
+        createWikiStatus,
+        setCreateWikiStatus,
+        pendingChangePageToolCall,
+        setPendingChangePageToolCall, 
+        pendingChangePageHTML,
+        setPendingChangePageHTML
       }}
     >
       {children}

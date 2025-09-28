@@ -33,9 +33,23 @@ export const Textarea = ({
         placeholder="Send a message..."
         onChange={handleInputChange}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && !isLoading && input.trim()) {
+          if (e.key === "Enter" && !(e.shiftKey || e.ctrlKey) && !isLoading && input.trim()) {
             e.preventDefault();
             e.currentTarget.form?.requestSubmit();
+          }else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            const { selectionStart, selectionEnd, value } = e.currentTarget;
+            const newValue =
+              value.substring(0, selectionStart) +
+              "\n" +
+              value.substring(selectionEnd);
+            e.currentTarget.value = newValue;
+
+            handleInputChange({
+              ...e,
+              target: { ...e.currentTarget, value: newValue },
+            } as React.ChangeEvent<HTMLTextAreaElement>);
+
           }
         }}
       />

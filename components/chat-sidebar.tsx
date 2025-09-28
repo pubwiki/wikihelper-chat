@@ -76,8 +76,8 @@ export function ChatSidebar() {
 
   //Login logic
   const [loginOpen, setLoginOpen] = useState(true);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState(((typeof window !== 'undefined')&&localStorage.getItem("username"))||"");
+  const [password, setPassword] = useState(((typeof window !== 'undefined')&&localStorage.getItem("password"))||"");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
@@ -87,7 +87,8 @@ export function ChatSidebar() {
     setMcpServers,
     selectedMcpServers,
     setSelectedMcpServers,
-    setPubwikiCookies
+    setPubwikiCookies,
+    setUserOptions
   } = useMCP();
 
   const handleLogin = async () => {
@@ -117,6 +118,8 @@ export function ChatSidebar() {
         setUserId(newUserId);
         toast.success("User ID updated successfully");
       }
+      localStorage.setItem("username",username)
+      localStorage.setItem("password",password)
       setLoginOpen(false);
     } catch (err) {
       setLoginError("请求出错，请稍后再试");
@@ -136,6 +139,7 @@ export function ChatSidebar() {
   // Start a new chat
   const handleNewChat = () => {
     router.push("/");
+    setUserOptions([]);
   };
 
   // Delete a chat
