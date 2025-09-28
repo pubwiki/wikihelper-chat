@@ -1,7 +1,8 @@
 import { experimental_createMCPClient as createMCPClient } from 'ai';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { useFrontToolServer } from './built-in-client';
+import { useUIClient } from './built-in-ui-client';
+import { buildWikiHelperTools } from './built-in-wikihelper-client';
 
 export interface KeyValuePair {
   key: string;
@@ -20,7 +21,7 @@ export interface MCPClientManager {
   cleanup: () => Promise<void>;
 }
 
-export function wrapTransportWithChatId(transport: Transport, chatId: string, headers: Record<string, string>): Transport {
+export function wrapTransportWithMeta(transport: Transport, chatId: string, headers: Record<string, string>): Transport {
   return new Proxy(transport, {
     get(target, prop, receiver) {
       if (prop === "send") {
@@ -57,12 +58,12 @@ export function wrapTransportWithChatId(transport: Transport, chatId: string, he
 export async function initializeMCPClients(
   mcpServers: MCPServerConfig[] = [],
   chatId:string,
-  abortSignal?: AbortSignal
+  appendHeaders: Record<string, string> = {},
+  abortSignal?: AbortSignal,
 ): Promise<MCPClientManager> {
   // Initialize tools
   let tools = {};
   const mcpClients: any[] = [];
-  let wikiHeaders:Record<string, string> = {};
   // Process each MCP server configuration
   for (const mcpServer of mcpServers) {
     try {
@@ -71,7 +72,6 @@ export async function initializeMCPClients(
         return acc;
       }, {} as Record<string, string>);
 
-      wikiHeaders = {...wikiHeaders, ...headers}
 
       const transport = mcpServer.type === 'sse'
         ? {
@@ -104,12 +104,20 @@ export async function initializeMCPClients(
       // Continue with other servers instead of failing the entire request
     }
   }
-  console.log("wikiHeaders:", JSON.stringify(wikiHeaders))
-  const useFront = await useFrontToolServer()
-  const builtInClient = await createMCPClient({transport:wrapTransportWithChatId(useFront.client_transport, chatId, wikiHeaders)})
+
+  // append client to use Wikihelper MCP server
+  const {tools: wikihelperTools, client: wikihelperClient} = await buildWikiHelperTools(appendHeaders,["create-page","update-page"])
+
+  mcpClients.push(wikihelperClient)
+  tools = { ...tools, ...wikihelperTools}
+
+  // append client to use front user interface
+  const useUITool = await useUIClient()
+  const builtInClient = await createMCPClient({transport:wrapTransportWithMeta(useUITool.client_transport, chatId, appendHeaders)})
   mcpClients.push(builtInClient)
   const builtInTools = await builtInClient.tools()
-  console.log(`Bulit in MCP tools:`, Object.keys(builtInTools));
+
+
   tools = { ...tools, ...builtInTools}
 
   // Register cleanup for all clients if an abort signal is provided

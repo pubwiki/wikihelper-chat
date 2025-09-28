@@ -217,7 +217,7 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
       .map((server) => ({
         type: server.type,
         url: server.url,
-        headers: server.id==="wiki-helper"?server.headers?.concat([{key:"reqcookie",value:pubwikiCookies.join("; ")}]):server.headers,
+        headers: server.headers,
       }));
   };
 

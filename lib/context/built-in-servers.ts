@@ -1,16 +1,5 @@
 import { type MCPServer } from "./mcp-context";
 
-export function buildWikiHelper(): MCPServer {
-  return {
-    id: "wiki-helper",
-    name: "Wiki Helper",
-    url: "http://192.168.31.227:8080/mcp",
-    type: "http",
-    description: "This is a built-in server.",
-    builtIn: true,
-    headers:[]
-  };
-}
 
 function buildExaSearch(): MCPServer {
   return {
@@ -25,8 +14,6 @@ function buildExaSearch(): MCPServer {
 
 export function getBuiltInServers(): MCPServer[] {
   return [
-    //
-    buildWikiHelper(),
     buildExaSearch(),
   ];
 }

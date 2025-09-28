@@ -35,29 +35,30 @@ export const extendWikiHTML = (html: string): string => {
             ${wikiCSSHead + html}
           </body>
           </html>`
-    .replace(
-      /<a\s+[^>]*role=["']button["'][^>]*>[\s\S]*?<\/a>/gi,
-      `<button class="annotate-btn" onclick="(function(el){
-        var note = prompt('Please Input annotation: ');
-        if (!note) return;
+  .replace(
+    /<a\s+[^>]*role=["']button["'][^>]*>[\s\S]*?<\/a>/gi,
+    `<button class="annotate-btn" onclick="(function(el){
+      var note = prompt('Please Input annotation: ');
+      if (!note) return;
 
-        var heading = el.closest('.mw-heading') || el.closest('h2, h3, h4');
-        var sectionId = heading ? (heading.querySelector('h2,h3,h4')?.id || heading.id || '') : '';
-        var sectionTitle = heading ? (heading.innerText || '') : '';
+      var heading = el.closest('.mw-heading') || el.closest('h2, h3, h4');
+      var titleEl = heading ? heading.querySelector('h2,h3,h4') || heading : null;
+      var sectionId = titleEl ? (titleEl.id || '') : '';
+      var sectionTitle = titleEl ? (titleEl.textContent || '') : '';
 
-        var p = document.createElement('p');
-        p.className = 'mark';
-        p.textContent = note;
-        el.parentNode.insertBefore(p, el.nextSibling);
+      var p = document.createElement('p');
+      p.className = 'mark';
+      p.textContent = note;
+      el.parentNode.insertBefore(p, el.nextSibling);
 
-        window.parent.postMessage({
-          type: 'ANNOTATION_ADDED',
-          sectionId: sectionId,
-          sectionTitle: sectionTitle,
-          text: note
-        }, '*');
-      })(this)">Annotate</button>`
-    )
+      window.parent.postMessage({
+        type: 'ANNOTATION_ADDED',
+        sectionId: sectionId,
+        sectionTitle: sectionTitle,
+        text: note
+      }, '*');
+    })(this)">Annotate</button>`
+  )
 
     .replace(/<div[^>]*id=(["'])toc\1[^>]*>[\s\S]*?<\/ul>\s*<\/div>/i, "")
 

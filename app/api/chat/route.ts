@@ -18,12 +18,14 @@ export async function POST(req: Request) {
     selectedModel,
     userId,
     mcpServers = [],
+    appendHeaders = {}
   }: {
     messages: UIMessage[];
     chatId?: string;
     selectedModel: modelID;
     userId: string;
     mcpServers?: MCPServerConfig[];
+    appendHeaders?: Record<string, string>;
   } = await req.json();
 
   const { isBot, isVerifiedBot } = await checkBotId();
@@ -93,7 +95,7 @@ export async function POST(req: Request) {
   }
 
   // Initialize MCP clients using the already running persistent HTTP/SSE servers
-  const { tools, cleanup } = await initializeMCPClients(mcpServers, id, req.signal);
+  const { tools, cleanup } = await initializeMCPClients(mcpServers, id, appendHeaders, req.signal);
 
   console.log("messages", messages);
   console.log("parts", messages.map(m => m.parts.map(p => p)));

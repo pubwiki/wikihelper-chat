@@ -64,7 +64,8 @@ export default function Chat() {
     pendingChangePageToolCall,
     setPendingChangePageToolCall,
     pendingChangePageHTML,
-    setPendingChangePageHTML
+    setPendingChangePageHTML,
+    pubwikiCookies
   } = useMCP();
 
   // Initialize userId
@@ -173,6 +174,7 @@ export default function Chat() {
       mcpServers: servers,
       chatId: chatId || generatedChatId, // Use generated ID if no chatId in URL
       userId,
+      appendHeaders: { "reqcookie": pubwikiCookies.join("; ") }, // pass pubwiki cookies to backend API
     },
     experimental_throttle: 100,
     onFinish: () => {

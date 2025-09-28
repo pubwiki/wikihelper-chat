@@ -9,14 +9,11 @@ import type {
   ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import { useUIResult } from "./use-ui-result";
-import { buildWikiHelper } from "./context/built-in-servers";
-import { experimental_createMCPClient as createMCPClient } from "ai";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { randomUUID } from "crypto";
-export const API_ENDPOINT = "https://yuri.rs/"
-const wikiServer = buildWikiHelper();
+import { buildWikiHelperTools } from "./built-in-wikihelper-client";
 
 
+export const WIKIFRAM_ENDPOINT = "https://yuri.rs/"
 
 export async function makeRestPostRequest<T>(
 	path: string,
@@ -154,17 +151,7 @@ function uiRequestChangePageTool(server: McpServer): RegisteredTool {
           };
         }
 
-        const client = await createMCPClient({
-          transport: new StreamableHTTPClientTransport(
-            new URL(wikiServer.url),
-            {
-              requestInit: {
-                headers,
-              },
-            }
-          ),
-        });
-        const tools = await client.tools();
+        const {tools} = await buildWikiHelperTools(headers);
 
         if (args.type === "create") {
           const callResult = await tools["create-page"].execute(
@@ -249,7 +236,7 @@ export function newWikiTool(server: McpServer): RegisteredTool {
       try {
         data = await makeRestPostRequest(
           `provisioner/v1/wikis`,
-          API_ENDPOINT,
+          WIKIFRAM_ENDPOINT,
           headers,
           {
             name,
@@ -327,7 +314,7 @@ let useFrontToolServerPromise:
   | Promise<{ server: McpServer; client_transport: Transport }>
   | undefined;
 
-export function useFrontToolServer() {
+export function useUIClient() {
   if (!useFrontToolServerPromise) {
     useFrontToolServerPromise = buildClients();
   }
