@@ -15,7 +15,8 @@ import { convertToUIMessages } from "@/lib/chat-store";
 import { type Message as DBMessage } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
 import {
-  ChangeWikiPageArgs,
+  CreateWikiArgs,
+  EditWikiPageArgs,
   useMCP,
   UserOptionBtn,
 } from "@/lib/context/mcp-context";
@@ -32,6 +33,9 @@ import { Label } from "@radix-ui/react-label";
 import { InfoTable } from "./info-table";
 import { Button } from "./ui/button";
 import { extendWikiHTML } from "@/lib/context/html-util";
+import { randomUUID } from "crypto";
+import { UIMessage } from "ai";
+import { Progess } from "./ui/progress";
 
 // Type for chat data from DB
 interface ChatData {
@@ -40,6 +44,49 @@ interface ChatData {
   createdAt: string;
   updatedAt: string;
 }
+
+// 生成文件内容的 sha256 哈希作为文件名
+async function generateFileName(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  return ext ? `${hashHex}.${ext}` : hashHex;
+}
+
+export async function uploadImage(file: File) {
+  // 先生成基于内容的哈希文件名
+  const key = await generateFileName(file);
+
+  // 第一步：向后端要一个 signed PUT URL
+  const res = await fetch("/api/upload/image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fileName: key, fileType: file.type }),
+  });
+
+  const { uploadUrl, publicUrl } = await res.json();
+
+  // 第二步：前端直传文件
+  await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type },
+    body: file,
+  });
+
+  // 第三步：通知后端把对象 ACL 设为 public-read
+  const aclRes = await fetch("/api/upload/make-public", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key }),
+  });
+
+  const { publicUrl: finalUrl } = await aclRes.json();
+
+  return finalUrl;
+}
+
 
 export default function Chat() {
   const router = useRouter();
@@ -54,6 +101,9 @@ export default function Chat() {
   const [userId, setUserId] = useState<string>("");
   const [generatedChatId, setGeneratedChatId] = useState<string>("");
 
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   // Get MCP server data from context
   const {
     getActiveServersForApi,
@@ -61,10 +111,10 @@ export default function Chat() {
     setUserOptions,
     createWikiStatus,
     setCreateWikiStatus,
-    pendingChangePageToolCall,
-    setPendingChangePageToolCall,
-    pendingChangePageHTML,
-    setPendingChangePageHTML,
+    pendingEditPageToolCall,
+    setPendingEditPageToolCall,
+    pendingEditPageHTML,
+    setPendingEditPageHTML,
     pubwikiCookies
   } = useMCP();
 
@@ -81,7 +131,7 @@ export default function Chat() {
   }, [chatId]);
 
   const setUIRequestResult = async (result: Record<string, string>) => {
-    await fetch("/api/use_ui", {
+    await fetch("/api/edit/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chatId: chatId || generatedChatId, result }),
@@ -165,6 +215,7 @@ export default function Chat() {
     append,
     status,
     stop,
+    setMessages
   } = useChat({
     id: chatId || generatedChatId, // Use generated ID if no chatId in URL
     initialMessages,
@@ -187,25 +238,28 @@ export default function Chat() {
       if (toolCall.toolName === "ui-show-options") {
         const args = (toolCall.args as any)["options"] as UserOptionBtn[];
         setUserOptions(args);
-      } else if (toolCall.toolName === "change-page") {
-        const args = toolCall.args as ChangeWikiPageArgs;
-        setPendingChangePageToolCall({
+      } else if (toolCall.toolName === "edit-page") {
+        const args = toolCall.args as EditWikiPageArgs;
+        setPendingEditPageToolCall({
           type: "update",
           args,
         });
         fetch("/api/parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ wikitext: args.source }),
+          body: JSON.stringify({ wikitext: args.source, server: args.server }),
         })
           .then((res) => res.json())
           .then((data) => {
-            setPendingChangePageHTML(extendWikiHTML(data.html));
+            setPendingEditPageHTML(extendWikiHTML(data.html));
             console.log("Parsed HTML:", data.html);
           })
           .catch(() =>
-            setPendingChangePageHTML("<p>Error rendering preview</p>")
+            setPendingEditPageHTML("<p>Error rendering preview</p>")
           );
+      } else if (toolCall.toolName === "create-new-wiki-site") {
+        const args = toolCall.args as CreateWikiArgs;
+        setCreateWikiStatus({args:args,status:"waiting-confirmation"})
       }
     },
     onError: (error) => {
@@ -221,22 +275,62 @@ export default function Chat() {
 
   // Custom submit handler
   const handleFormSubmit = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
+    async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
+      let img_url = null as string|null;
+      if (imageFile){
+        try{
+            setUploading(true);
+            img_url = await uploadImage(imageFile)
+            console.log("Image uploaded to:", img_url);
+        }catch(err){
+          toast.error(`Image upload failed: ${err}, please try again.`);
+          return;
+        }
+        setImageFile(null);
+        setUploading(false);
+      }
+
+      
+      if (img_url) {
+        setMessages(messages.concat([
+          {
+            id: crypto.randomUUID(),
+            role: "user",
+            parts: [
+              {
+                type: "text",
+                text: `[PubwikiSystem] User uploaded an image: [image](${img_url}).
+                 Do NOT guess its content, should ask the user which wiki page to add it to.
+                 Note: when user answered, then use 'upload-image' tool to upload the image to the wiki site, and use 'edit-page' tool to add the image to the page.
+                 Thumbnail preview: ![thumbnail](${img_url})  `  
+              }
+            ],
+            content:``
+          }
+        ]))
+      }
+
 
       if (!chatId && generatedChatId && input.trim()) {
         // If this is a new conversation, redirect to the chat page with the generated ID
         const effectiveChatId = generatedChatId;
-
         // Submit the form
-        handleSubmit(e);
-
+        handleSubmit(e,{
+          body:{
+            //appendParts
+          }
+        });
         // Redirect to the chat page with the generated ID
         router.push(`/chat/${effectiveChatId}`);
       } else {
         setUserOptions([]);
         // Normal submission for existing chats
-        handleSubmit(e);
+        handleSubmit(e, {
+          body:{
+            //appendParts
+          }
+        });
       }
     },
     [chatId, generatedChatId, input, handleSubmit, router]
@@ -258,8 +352,8 @@ export default function Chat() {
       return;
     }
     append({
-      role: "system",
-      content: `[System] Click Action Button: ${o.title}, action: ${o.action}`,
+      role: "user",
+      content: `[PubwikiSystem] Click Action Button: ${o.title}, action: ${o.action}`,
     });
     setUserOptions([]);
   };
@@ -281,6 +375,9 @@ export default function Chat() {
               isLoading={isLoading}
               status={status}
               stop={stop}
+              imageFile={imageFile}
+              setImageFile={setImageFile}
+              isUploading={uploading}
             />
           </form>
         </div>
@@ -314,12 +411,15 @@ export default function Chat() {
               isLoading={isLoading}
               status={status}
               stop={stop}
+              imageFile={imageFile}
+              setImageFile={setImageFile}
+              isUploading={uploading}
             />
           </form>
         </>
       )}
       {createWikiStatus && (
-        <Dialog open={createWikiStatus.status == ""}>
+        <Dialog open={true}>
           <DialogContent
             className="sm:max-w-[500px]"
             onInteractOutside={(e) => e.preventDefault()}
@@ -353,6 +453,14 @@ export default function Chat() {
               className="mt-4"
             />
 
+            <div className="mt-4 flex flex-col gap-8">
+              <span className="text-md text-foreground font-bold">
+                Creating status: {createWikiStatus.status}
+              </span>
+              <Progess value={12}></Progess>
+            </div>
+
+
             <DialogFooter className="mt-4">
               <Button>Confirm</Button>
               <Button
@@ -366,7 +474,7 @@ export default function Chat() {
         </Dialog>
       )}
 
-      <Dialog open={!!pendingChangePageToolCall}>
+      <Dialog open={!!pendingEditPageToolCall}>
         <DialogContent
           className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto"
           onInteractOutside={(e) => e.preventDefault()}
@@ -374,31 +482,31 @@ export default function Chat() {
         >
           <DialogHeader>
             <DialogTitle>
-              {pendingChangePageToolCall?.type === "create"
+              {pendingEditPageToolCall?.type === "create"
                 ? "Create Page"
                 : "Update Page"}
             </DialogTitle>
             <DialogDescription>
-              Please review the details below before proceeding.
+              Please review the details below before proceeding. You can annotate for section, annotation will not be saved but use as reference for the AI to regenerate the content.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
               <Label className="font-semibold">Page Title</Label>
-              <p>{pendingChangePageToolCall?.args.title}</p>
+              <p>{pendingEditPageToolCall?.args.title}</p>
             </div>
 
             <div>
               <Label className="font-semibold">Comment</Label>
-              <p>{pendingChangePageToolCall?.args.comment}</p>
+              <p>{pendingEditPageToolCall?.args.comment}</p>
             </div>
 
             <div>
               <Label className="font-semibold">Preview</Label>
               <iframe
                 className="w-full h-[300px] min-h-[40vh] border rounded-md"
-                srcDoc={`${pendingChangePageHTML}`}
+                srcDoc={`${pendingEditPageHTML}`}
               />
             </div>
           </div>
@@ -406,14 +514,14 @@ export default function Chat() {
           <DialogFooter className="mt-4">
             <Button
               onClick={() => {
-                if (pendingChangePageToolCall) {
+                if (pendingEditPageToolCall) {
                   setUIRequestResult({
                     confirm: "false",
                     content: "User rejected the change. And adviced to regenerate. User annotations: " + pendingChangePageAnnotations.current.map(v=>`[${v.title}] ${v.text}`).join("; "),
                   });
                   pendingChangePageAnnotations.current = [];
-                  setPendingChangePageToolCall(null);
-                  setPendingChangePageHTML("Rendering preview...");
+                  setPendingEditPageToolCall(null);
+                  setPendingEditPageHTML("Rendering preview...");
                 }
               }}
             >
@@ -421,14 +529,14 @@ export default function Chat() {
             </Button>
             <Button
               onClick={() => {
-                if (pendingChangePageToolCall) {
+                if (pendingEditPageToolCall) {
                   setUIRequestResult({
                     confirm: "true",
                     content: "User confirmed the change.",
                   });
                   pendingChangePageAnnotations.current = [];
-                  setPendingChangePageToolCall(null);
-                  setPendingChangePageHTML("Rendering preview...");
+                  setPendingEditPageToolCall(null);
+                  setPendingEditPageHTML("Rendering preview...");
                 }
               }}
             >
@@ -437,14 +545,14 @@ export default function Chat() {
             <Button
               variant="secondary"
               onClick={() => {
-                if (pendingChangePageToolCall) {
+                if (pendingEditPageToolCall) {
                   setUIRequestResult({
                     confirm: "false",
                     content: "User rejected the change.",
                   });
                   pendingChangePageAnnotations.current = [];
-                  setPendingChangePageToolCall(null);
-                  setPendingChangePageHTML("Rendering preview...");
+                  setPendingEditPageToolCall(null);
+                  setPendingEditPageHTML("Rendering preview...");
                 }
               }}
             >

@@ -136,7 +136,7 @@ export const ModelPicker = ({
   };
 
   return (
-    <div className="absolute bottom-2 left-2 z-10">
+    <div className="absolute bottom-2 right-14 z-10">
       <Select
         value={validModelId}
         onValueChange={handleModelChange}
@@ -156,7 +156,7 @@ export const ModelPicker = ({
           </SelectValue>
         </SelectTrigger>
         <SelectContent
-          align="start"
+          align="end"
           className="bg-background/95 dark:bg-muted/95 backdrop-blur-sm border-border/80 rounded-lg overflow-hidden p-0 w-[280px] sm:w-[350px] md:w-[515px]"
         >
           <div className="grid grid-cols-1 sm:grid-cols-[120px_1fr] md:grid-cols-[200px_1fr] items-start">

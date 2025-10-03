@@ -14,6 +14,6 @@ function buildExaSearch(): MCPServer {
 
 export function getBuiltInServers(): MCPServer[] {
   return [
-    buildExaSearch(),
+    //buildExaSearch(),
   ];
 }

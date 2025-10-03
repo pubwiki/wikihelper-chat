@@ -3,7 +3,7 @@ import { experimental_createMCPClient as createMCPClient } from "ai";
 
 const MCP_WIKIHELPER_URL = "http://192.168.31.227:8080/mcp";
 
-export async function buildWikiHelperTools(headers: Record<string, string> = {},disable_tools:string[] = []){
+export async function buildWikiHelperTools(headers: Record<string, string> = {},disableTools:string[] = []){
     const client = await createMCPClient({
       transport: new StreamableHTTPClientTransport(
         new URL(MCP_WIKIHELPER_URL),
@@ -15,7 +15,7 @@ export async function buildWikiHelperTools(headers: Record<string, string> = {},
       ),
     });
     const tools = await client.tools();
-    disable_tools.forEach(toolName=>{
+    disableTools.forEach(toolName=>{
       if(tools[toolName]){
         delete tools[toolName]
       }

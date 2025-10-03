@@ -259,6 +259,12 @@ const components: Partial<Components> = {
       {...props}
     />
   ),
+  img: ({node, ...props}) => (
+    <img
+      {...props}
+      className="max-w-[200px] max-h-[200px] object-contain rounded-md border"
+    />
+  ),
 };
 
 const remarkPlugins = [remarkGfm];

@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const { wikitext } = await req.json();
+    const { wikitext,server } = await req.json();
 
     if (!wikitext) {
       return NextResponse.json({ error: "Missing wikitext" }, { status: 400 });
     }
 
-    const response = await fetch("https://pub.wiki/api.php?action=parse&format=json", {
+    const response = await fetch(`${server}api.php?action=parse&format=json`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",

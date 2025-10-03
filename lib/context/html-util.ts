@@ -29,6 +29,9 @@ export const extendWikiHTML = (html: string): string => {
                 background: #fef3c7;
                 border-left: 3px solid #f59e0b;
               }
+              body{
+                background-color: white;
+              }
             </style>
           </head>
           <body>

@@ -2,6 +2,7 @@ import { modelID } from "@/ai/providers";
 import { Textarea as ShadcnTextarea } from "@/components/ui/textarea";
 import { ArrowUp, Loader2 } from "lucide-react";
 import { ModelPicker } from "./model-picker";
+import { ImageUpload } from "./image-upload";
 
 interface InputProps {
   input: string;
@@ -11,6 +12,9 @@ interface InputProps {
   stop: () => void;
   selectedModel: modelID;
   setSelectedModel: (model: modelID) => void;
+  imageFile: File | null;
+  setImageFile: (file: File | null) => void;
+  isUploading: boolean;
 }
 
 export const Textarea = ({
@@ -21,6 +25,9 @@ export const Textarea = ({
   stop,
   selectedModel,
   setSelectedModel,
+  imageFile,
+  setImageFile,
+  isUploading
 }: InputProps) => {
   const isStreaming = status === "streaming" || status === "submitted";
 
@@ -53,21 +60,24 @@ export const Textarea = ({
           }
         }}
       />
+
       <ModelPicker
         setSelectedModel={setSelectedModel}
         selectedModel={selectedModel}
       />
+      <ImageUpload imageFile={imageFile} setImageFile={setImageFile} />
 
       <button
-        type={isStreaming ? "button" : "submit"}
+        type={ (isStreaming || isUploading) ? "button" : "submit"}
         onClick={isStreaming ? stop : undefined}
         disabled={
           (!isStreaming && !input.trim()) ||
-          (isStreaming && status === "submitted")
+          (isStreaming && status === "submitted") ||
+          isUploading
         }
         className="absolute right-2 bottom-2 rounded-full p-2 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed transition-all duration-200"
       >
-        {isStreaming ? (
+        {(isStreaming || isUploading) ? (
           <Loader2 className="h-4 w-4 text-primary-foreground animate-spin" />
         ) : (
           <ArrowUp className="h-4 w-4 text-primary-foreground" />

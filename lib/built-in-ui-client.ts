@@ -82,9 +82,9 @@ function uiShowOptionsTool(server: McpServer): RegisteredTool {
   );
 }
 
-function uiRequestChangePageTool(server: McpServer): RegisteredTool {
+function uiRequestEditPageTool(server: McpServer): RegisteredTool {
   return server.tool(
-    "change-page",
+    "edit-page",
     "Show a confirmation dialog in the UI asking the user whether to accept the proposed page change. " +
       "This tool must be called whenever the assistant has prepared a page update and needs explicit user approval. " +
       "⚠️ Important: Do not assume the outcome on your own — the result will only be known once the user confirms or rejects it. " +
@@ -202,9 +202,9 @@ function uiRequestChangePageTool(server: McpServer): RegisteredTool {
   );
 }
 
-export function newWikiTool(server: McpServer): RegisteredTool {
+export function createNewWikiTool(server: McpServer): RegisteredTool {
   return server.tool(
-    "new-wiki",
+    "create-new-wiki-site",
     "Submit a request to create a new wiki (sub-site) in the wiki farm. " +
       "This process may take several minutes. The tool will return a task_id, " +
       "which can be used later to check the creation status. " +
@@ -285,8 +285,6 @@ export function newWikiTool(server: McpServer): RegisteredTool {
             type: "text",
             text: [
               `Wiki creation request submitted successfully.`,
-              `Task ID: ${data.task_id || "N/A"}`,
-              `Slug: ${slug}`,
               `Status: The wiki is being created in the background. This may take several minutes.`,
               `Note for assistant: The task is in progress, you may end the conversation for now.`,
             ].join("\n"),
@@ -305,7 +303,7 @@ async function buildClients() {
     version: "1.0",
   });
   uiShowOptionsTool(server);
-  uiRequestChangePageTool(server);
+  uiRequestEditPageTool(server);
   await server.connect(server_transport);
   return { server, client_transport };
 }

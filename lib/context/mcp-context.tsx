@@ -58,7 +58,27 @@ export interface CreateWikiArgs {
   language: string;
 }
 
-export interface ChangeWikiPageArgs {
+export interface CreateWikiStatus{
+  args: CreateWikiArgs;
+  status: "queued"|"running"|"succeeded"|"failed"|"waiting-confirmation";
+  phase?: "dir_copy" | "render_ini" | "db_provision" | "oauth" | "docker_install" | "docker_index_cfg" | "flip_bootstrap" | "index",
+  message?: string;
+}
+
+export type CreateWikiSSEMessage = {
+  type:"progress",
+  status:"queued"|"running",
+  message?:string,
+  phase?:"dir_copy" | "render_ini" | "db_provision" | "oauth" | "docker_install" | "docker_index_cfg" | "flip_bootstrap" | "index"
+} |{
+  type:"status",
+  status:"succeeded"|"failed",
+  message?:string
+}
+
+
+export interface EditWikiPageArgs {
+  server: string; // MCP server
   source: string; // wikitext source
   title: string; // page title
   comment?: string; // edit comment
@@ -85,18 +105,18 @@ interface MCPContextType {
   setPubwikiCookies: (cookies:string[]) => void,
   userOptions: UserOptionBtn[],
   setUserOptions: (opts:UserOptionBtn[]) => void,
-  createWikiStatus: { args: CreateWikiArgs; status: string } | undefined;
-  pendingChangePageToolCall: null | {
+  createWikiStatus: CreateWikiStatus | undefined;
+  pendingEditPageToolCall: null | {
     type: "create" | "update";
-    args: ChangeWikiPageArgs;
+    args: EditWikiPageArgs;
   };
-  setCreateWikiStatus: (value: { args: CreateWikiArgs; status: string } | undefined) => void;
-  setPendingChangePageToolCall: (value: null | {
+  setCreateWikiStatus: (value: CreateWikiStatus | undefined) => void;
+  setPendingEditPageToolCall: (value: null | {
     type: "create" | "update";
-    args: ChangeWikiPageArgs;
+    args: EditWikiPageArgs;
   }) => void;
-  pendingChangePageHTML:string,
-  setPendingChangePageHTML:(html:string)=>void
+  pendingEditPageHTML:string,
+  setPendingEditPageHTML:(html:string)=>void
 }
 
 const MCPContext = createContext<MCPContextType | undefined>(undefined);
@@ -151,11 +171,15 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
   const [pubwikiCookies, setPubwikiCookies] = useState<string[]>([]);
   const [userOptions,setUserOptions] = useState<UserOptionBtn[]>([]);
   const [createWikiStatus, setCreateWikiStatus] = useState<
-    { args: CreateWikiArgs; status: string } | undefined
-  >(undefined);
+    CreateWikiStatus | undefined
+  >({
+    args: { name: "", slug: "", language: "en" },
+    status: "succeeded",
+    phase: "dir_copy",
+  });
   const [pendingChangePageToolCall, setPendingChangePageToolCall] = useState<null | {
     type: "create" | "update";
-    args: ChangeWikiPageArgs;
+    args: EditWikiPageArgs;
   }>(null);
 
   const [pendingChangePageHTML,setPendingChangePageHTML] = useState<string>("");
@@ -341,10 +365,10 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
         setUserOptions,
         createWikiStatus,
         setCreateWikiStatus,
-        pendingChangePageToolCall,
-        setPendingChangePageToolCall, 
-        pendingChangePageHTML,
-        setPendingChangePageHTML
+        pendingEditPageToolCall: pendingChangePageToolCall,
+        setPendingEditPageToolCall: setPendingChangePageToolCall, 
+        pendingEditPageHTML: pendingChangePageHTML,
+        setPendingEditPageHTML: setPendingChangePageHTML
       }}
     >
       {children}

@@ -90,11 +90,6 @@ export async function initializeMCPClients(
 
       const mcptools = await mcpClient.tools();
 
-      if ("create-page" in mcptools && "update-page" in mcptools) {
-        delete mcptools["create-page"];
-        delete mcptools["update-page"];
-      }
-
       console.log(`MCP tools from ${mcpServer.url}:`, Object.keys(mcptools));
 
       // Add MCP tools to tools object
@@ -107,7 +102,6 @@ export async function initializeMCPClients(
 
   // append client to use Wikihelper MCP server
   const {tools: wikihelperTools, client: wikihelperClient} = await buildWikiHelperTools(appendHeaders,["create-page","update-page"])
-
   mcpClients.push(wikihelperClient)
   tools = { ...tools, ...wikihelperTools}
 

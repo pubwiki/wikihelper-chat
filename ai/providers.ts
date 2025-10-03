@@ -1,5 +1,6 @@
 import { createQwen } from 'qwen-ai-provider';
 import { createOpenAI } from '@ai-sdk/openai';
+import { createDeepSeek } from '@ai-sdk/deepseek';
 import {
   customProvider
 } from "ai";
@@ -23,18 +24,24 @@ const openaiClient = createOpenAI({
   baseURL:"https://api.yesapikey.com/v1"
 })
 
+const deepSeekClient = createDeepSeek({
+  apiKey: process.env.DEEPSEEK_API_KEY,
+});
+
+
 const languageModels = {
-  "qwen3-max": qwenClient('qwen3-max'),
   "qwen-plus": qwenClient('qwen-plus-latest'),
   "gpt-5": openaiClient('gpt-5-2025-08-07'),
+  "deepseek": deepSeekClient('deepseek-chat'),
+
 };
 
 export const modelDetails: Record<keyof typeof languageModels, ModelInfo> = {
-  "qwen3-max": {
-    provider: "Alibaba",
-    name: "Qwen3-Max",
-    description: "The largest model in the Qwen series to date, with a total parameter scale reaching the trillion level. It has powerful comprehension and generation capabilities, but its speed is relatively slow.",
-    apiVersion: "qwen-max",
+  "deepseek": {
+    provider: "DeepSeek",
+    name: "DeepSeek",
+    description: "DeepSeek's advanced language model optimized for chat applications, providing high-quality responses with a focus on understanding context and user intent.",
+    apiVersion: "deepseek-v3.2-exp",
     capabilities: ["Balanced", "Efficient", "Agentic"]
   },
   "qwen-plus": {
@@ -71,4 +78,4 @@ export type modelID = keyof typeof languageModels;
 
 export const MODELS = Object.keys(languageModels);
 
-export const defaultModel: modelID = "qwen3-max";
+export const defaultModel: modelID = "deepseek";
