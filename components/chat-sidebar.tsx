@@ -64,6 +64,7 @@ import { Label } from "@/components/ui/label";
 import { useMCP } from "@/lib/context/mcp-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AnimatePresence, motion } from "motion/react";
+import { SIGN_UP_URL } from "@/lib/constants";
 
 export function ChatSidebar() {
   const router = useRouter();
@@ -559,7 +560,7 @@ export function ChatSidebar() {
           <DialogHeader>
             <DialogTitle>Login</DialogTitle>
             <DialogDescription>
-              Please enter your credentials to access your account.
+              Please enter your credentials to access your account. <a className="text-blue-500 hover:underline" href={SIGN_UP_URL}>SIGN UP a new account</a>
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

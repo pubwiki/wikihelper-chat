@@ -16,6 +16,8 @@ import { type Message as DBMessage } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
 import {
   CreateWikiArgs,
+  CreateWikiSSEProgressMessage,
+  CreateWikiSSEStatusMessage,
   EditWikiPageArgs,
   useMCP,
   UserOptionBtn,
@@ -36,6 +38,8 @@ import { extendWikiHTML } from "@/lib/context/html-util";
 import { randomUUID } from "crypto";
 import { UIMessage } from "ai";
 import { Progess } from "./ui/progress";
+import { SITE_SUFFIX, WIKIFRAM_ENDPOINT } from "@/lib/constants";
+import { parseWikiUrl } from "@/lib/common/utils";
 
 // Type for chat data from DB
 interface ChatData {
@@ -207,6 +211,51 @@ export default function Chat() {
 
   const servers = getActiveServersForApi();
 
+  const streamCreateWiki = async (args: CreateWikiArgs) => {
+    setCreateWikiStatus({
+      ...createWikiStatus!,
+      resultStatus: "in-progress",
+    })
+    const res = await fetch("/api/task/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({...args, reqcookie:pubwikiCookies.join("; ")}),
+    });
+    const { taskId, error } = await res.json();
+    const wikiUrl = `https://${args.slug}${SITE_SUFFIX}`;
+    if (!taskId) {
+      toast.error(`Failed to create wiki on: ${wikiUrl}, no task ID returned: ${error}`);
+      append({
+        role: "user",
+        content: `[PubwikiSystem] Failed to create wiki on: ${wikiUrl}, message: ${error}`,
+      });
+      return;
+    }
+    const evtSource = new EventSource(`/api/task/${taskId}/status?reqcookie=${encodeURIComponent(pubwikiCookies.join("; "))}`);
+    evtSource.addEventListener("status", (data) => {
+      const e = JSON.parse(data.data) as CreateWikiSSEStatusMessage;
+      if(e.status!="succeeded"&&e.status!="failed"){
+        return;
+      }
+      append({
+        role: "user",
+        content: `[PubwikiSystem] Create wiki finished on: ${wikiUrl}, message: ${JSON.stringify(e)}`,
+      });
+      evtSource.close();
+      setCreateWikiStatus(undefined)
+    });
+    evtSource.addEventListener("progress", (data) => {
+      const e = JSON.parse(data.data) as CreateWikiSSEProgressMessage;
+      setCreateWikiStatus({
+        ...createWikiStatus!,
+        status: e.status,
+        message: e.message,
+        phase: e.phase,
+        resultStatus: "in-progress",
+      })
+    });
+  };
+
   const {
     messages,
     input,
@@ -247,7 +296,7 @@ export default function Chat() {
         fetch("/api/parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ wikitext: args.source, server: args.server }),
+          body: JSON.stringify({ wikitext: args.source, server: parseWikiUrl(args.server), contentModel: args.contentModel || "wikitext" }),
         })
           .then((res) => res.json())
           .then((data) => {
@@ -259,7 +308,7 @@ export default function Chat() {
           );
       } else if (toolCall.toolName === "create-new-wiki-site") {
         const args = toolCall.args as CreateWikiArgs;
-        setCreateWikiStatus({args:args,status:"waiting-confirmation"})
+        setCreateWikiStatus({args:args,resultStatus:"waiting-confirmation"})
       }
     },
     onError: (error) => {
@@ -436,43 +485,53 @@ export default function Chat() {
 
             <InfoTable
               rows={[
-                { label: "Wiki Name", value: "TestWiki" },
+                { label: "Wiki Name", value: createWikiStatus.args.name },
                 {
                   label: "Wiki Sub-Website URL",
                   value: [
                     <span key="prefix" className="font-bold">
-                      123
+                      {createWikiStatus.args.slug}
                     </span>,
                     <span key="suffix" className="opacity-55">
-                      .pub.wiki
+                      {SITE_SUFFIX}
                     </span>,
                   ],
                 },
-                { label: "Wiki Language", value: "zh-cn" },
+                { label: "Wiki Language", value: createWikiStatus.args.language },
               ]}
               className="mt-4"
             />
 
             <div className="mt-4 flex flex-col gap-8">
               <span className="text-md text-foreground font-bold">
-                Creating status: {createWikiStatus.status}
+                Creating status: {createWikiStatus.status} - phase: {createWikiStatus.phase}
               </span>
-              <Progess value={12}></Progess>
+              {/* <Progress value={12}></Progress> */}
             </div>
-
-
+            {createWikiStatus.resultStatus === "waiting-confirmation" && (
             <DialogFooter className="mt-4">
-              <Button>Confirm</Button>
+              <Button
+                onClick={()=>{
+                  streamCreateWiki(createWikiStatus.args);
+                }
+              }>Confirm</Button>
               <Button
                 variant="secondary"
-                onClick={() => setCreateWikiStatus(undefined)}
+                onClick={() => {
+                  append({
+                    role: "user",
+                    content: `[PubwikiSystem] User cancelled wiki creation, you can ask why and what to change if needed.`,
+                  });
+                  setCreateWikiStatus(undefined);
+                }}
               >
                 Cancel
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
+    )}
 
       <Dialog open={!!pendingEditPageToolCall}>
         <DialogContent

@@ -1,5 +1,5 @@
 import { model, type modelID } from "@/ai/providers";
-import { smoothStream, streamText, type UIMessage } from "ai";
+import { Message, smoothStream, streamText, type UIMessage } from "ai";
 import { appendResponseMessages } from 'ai';
 import { saveChat, saveMessages, convertToDBMessages } from '@/lib/chat-store';
 import { nanoid } from 'nanoid';
@@ -13,6 +13,23 @@ import { checkBotId } from "botid/server";
 import { SYSTEM_PROMPT } from "@/lib/prompt";
 
 type UIMessageParts = UIMessage["parts"];
+
+function sanitizeMessages(messages: UIMessage[]): UIMessage[] {
+  return messages.map((msg,i) => {
+    if (msg.role === "assistant" && i != messages.length - 1) {
+      msg.parts = msg.parts.filter((p)=>{
+        if(p.type != "tool-invocation"){
+          return true
+        }
+        if(p.toolInvocation.state != "result"){
+          return false
+        }
+        return true
+      });
+    }
+    return msg;
+  });
+}
 
 export async function POST(req: Request) {
 
@@ -111,16 +128,20 @@ export async function POST(req: Request) {
     }
   }
 
+
+
   // Initialize MCP clients using the already running persistent HTTP/SSE servers
   const { tools, cleanup } = await initializeMCPClients(mcpServers, id, appendHeaders, req.signal);
 
   // Track if the response has completed
   let responseCompleted = false;
+  
+  const sanitizedMessages = sanitizeMessages(messages);
 
   const result = streamText({
     model: model.languageModel(selectedModel),
     system: SYSTEM_PROMPT,
-    messages,
+    messages: sanitizedMessages,
     tools,
     maxSteps: 50,
     experimental_transform: smoothStream({

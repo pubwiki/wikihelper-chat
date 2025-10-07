@@ -26,7 +26,7 @@ export function wrapTransportWithMeta(transport: Transport, chatId: string, head
     get(target, prop, receiver) {
       if (prop === "send") {
         return async (msg: any) => {
-          console.log("Original message to send:", msg);
+          //console.log("Original message to send:", msg);
           if (msg && typeof msg === "object" && msg.method === "tools/call") {
             msg = {
               ...msg,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fetch from "node-fetch";
 import crypto from "crypto";
+import { API_BACKEND } from "@/lib/constants";
 
 function getRetCookie(setCookieHeaders: string[] | string | null, cookies: string[]) {
   if (!setCookieHeaders) return cookies;
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing username or password" }, { status: 400 });
     }
 
-    const loginUrl = "https://pub.wiki/api.php?action=query&format=json&meta=tokens&type=login";
+    const loginUrl = `${API_BACKEND}api.php?action=query&format=json&meta=tokens&type=login`;
     const loginHeaders = {
       "User-Agent": "mediawiki-mcp-server/1.0.1",
       "Content-Type": "application/x-www-form-urlencoded",
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
     cookies = getRetCookie((loginRep.headers as any).raw()["set-cookie"], cookies);
 
     // 第二步：clientlogin
-    const clientLoginRep = await fetch("https://pub.wiki/api.php", {
+    const clientLoginRep = await fetch(`${API_BACKEND}api.php`, {
       method: "POST",
       headers: {
         ...loginHeaders,
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
         username,
         password,
         logintoken: loginToken,
-        loginreturnurl: "https://pub.wiki/",
+        loginreturnurl: `${API_BACKEND}`,
         rememberMe: "true",
         format: "json",
       }),

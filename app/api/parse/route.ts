@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const { wikitext,server } = await req.json();
+    const { wikitext,server,contentModel } = await req.json();
 
     if (!wikitext) {
       return NextResponse.json({ error: "Missing wikitext" }, { status: 400 });
@@ -14,10 +14,11 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        text: wikitext,
-        contentmodel: "wikitext",
-      }).toString(),
+        wikitext: wikitext,
+        contentmodel: contentModel || "wikitext",
+      }),
     });
+
 
     if (!response.ok) {
       return NextResponse.json({ error: "Failed to fetch from MediaWiki API" }, { status: 500 });

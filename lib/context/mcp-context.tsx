@@ -19,6 +19,7 @@ export type ServerStatus =
 const STORAGE_KEYS = {
   MCP_SERVERS: "mcp-servers",
   SELECTED_MCP_SERVERS: "selected-mcp-servers",
+  LOAD_WIKI_HISTORY: "load-wiki-history",
 } as const;
 
 export interface MCPTool {
@@ -60,17 +61,19 @@ export interface CreateWikiArgs {
 
 export interface CreateWikiStatus{
   args: CreateWikiArgs;
-  status: "queued"|"running"|"succeeded"|"failed"|"waiting-confirmation";
+  resultStatus:"succeeded"|"failed"|"in-progress"|"waiting-confirmation";
+  status?: "queued"|"running";
   phase?: "dir_copy" | "render_ini" | "db_provision" | "oauth" | "docker_install" | "docker_index_cfg" | "flip_bootstrap" | "index",
   message?: string;
 }
 
-export type CreateWikiSSEMessage = {
+export type CreateWikiSSEProgressMessage = {
   type:"progress",
   status:"queued"|"running",
   message?:string,
   phase?:"dir_copy" | "render_ini" | "db_provision" | "oauth" | "docker_install" | "docker_index_cfg" | "flip_bootstrap" | "index"
-} |{
+}
+export type CreateWikiSSEStatusMessage = {
   type:"status",
   status:"succeeded"|"failed",
   message?:string
@@ -83,6 +86,7 @@ export interface EditWikiPageArgs {
   title: string; // page title
   comment?: string; // edit comment
   type:"create" | "update";
+  contentModel?: string; // content model, default to "wikitext"
 }
 
 export type UserOptionBtn = {title:string,action:string}
@@ -116,7 +120,9 @@ interface MCPContextType {
     args: EditWikiPageArgs;
   }) => void;
   pendingEditPageHTML:string,
-  setPendingEditPageHTML:(html:string)=>void
+  setPendingEditPageHTML:(html:string)=>void,
+  loadWikiHistory:string[],
+  setLoadWikiHistory:(history:string[])=>void,
 }
 
 const MCPContext = createContext<MCPContextType | undefined>(undefined);
@@ -168,21 +174,18 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
       ))
     }
   );
+  const [loadWikiHistory,setLoadWikiHistory] = useLocalStorage<string[]>(STORAGE_KEYS.LOAD_WIKI_HISTORY, []);
   const [pubwikiCookies, setPubwikiCookies] = useState<string[]>([]);
   const [userOptions,setUserOptions] = useState<UserOptionBtn[]>([]);
   const [createWikiStatus, setCreateWikiStatus] = useState<
     CreateWikiStatus | undefined
-  >({
-    args: { name: "", slug: "", language: "en" },
-    status: "succeeded",
-    phase: "dir_copy",
-  });
-  const [pendingChangePageToolCall, setPendingChangePageToolCall] = useState<null | {
+  >(undefined);
+  const [pendingEditPageToolCall, setPendingEditPageToolCall] = useState<null | {
     type: "create" | "update";
     args: EditWikiPageArgs;
   }>(null);
 
-  const [pendingChangePageHTML,setPendingChangePageHTML] = useState<string>("");
+  const [pendingEditPageHTML,setPendingEditPageHTML] = useState<string>("");
 
   const [selectedMcpServers, setSelectedMcpServers] = useLocalStorage<string[]>(
     STORAGE_KEYS.SELECTED_MCP_SERVERS,
@@ -365,10 +368,12 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
         setUserOptions,
         createWikiStatus,
         setCreateWikiStatus,
-        pendingEditPageToolCall: pendingChangePageToolCall,
-        setPendingEditPageToolCall: setPendingChangePageToolCall, 
-        pendingEditPageHTML: pendingChangePageHTML,
-        setPendingEditPageHTML: setPendingChangePageHTML
+        pendingEditPageToolCall,
+        setPendingEditPageToolCall, 
+        pendingEditPageHTML,
+        setPendingEditPageHTML,
+        loadWikiHistory,
+        setLoadWikiHistory,
       }}
     >
       {children}

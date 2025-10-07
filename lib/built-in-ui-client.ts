@@ -12,8 +12,24 @@ import { useUIResult } from "./use-ui-result";
 import { randomUUID } from "crypto";
 import { buildWikiHelperTools } from "./built-in-wikihelper-client";
 
+export enum EditContentFormat {
+    css = "sanitized-css",  
+    wikitext = "wikitext",
+    lua = "Scribunto"
+}
 
-export const WIKIFRAM_ENDPOINT = "https://yuri.rs/"
+function minifyMediaWikiHTML(html:string) {
+  return html
+    // 去掉换行和制表符
+    .replace(/[\n\r\t]+/g, "")
+    // 去掉标签之间的多余空格（>   < -> ><）
+    .replace(/>\s+</g, "><")
+    // 去掉行首行尾的多余空格
+    .replace(/^\s+|\s+$/g, "")
+    // 压缩标签外部连续空格（标签之间可能会有很多空格）
+    .replace(/\s{2,}/g, " ");
+}
+
 
 export async function makeRestPostRequest<T>(
 	path: string,
@@ -113,8 +129,9 @@ function uiRequestEditPageTool(server: McpServer): RegisteredTool {
         .describe(
           'Section identifier for incremental edits: "new" to add a new section, "0" for the lead section, or a section index. ' +
             'If input "all", the entire page will be replaced or created. Prefer section edits whenever possible.'
-        ),
+        ).optional(),
       comment: z.string().describe("Optional edit summary.").optional(),
+      contentModel: z.nativeEnum( EditContentFormat ).describe( "Format of the page content to edit. default to 'wikitext', when editing css, use 'sanitized-css', when editing lua, use 'Scribunto'" ).optional().default( EditContentFormat.wikitext )
     },
     {
       title: "Request Change Confirmation",
@@ -122,7 +139,7 @@ function uiRequestEditPageTool(server: McpServer): RegisteredTool {
       destructiveHint: false,
     } as ToolAnnotations,
     async (args, extra) => {
-      const { title, source, comment, server, section } = args;
+      const { title, source, comment, server, section, contentModel } = args;
       const { chatId, headers } = (extra._meta || {
         chatId: "unknown",
         headers: {},
@@ -153,13 +170,17 @@ function uiRequestEditPageTool(server: McpServer): RegisteredTool {
 
         const {tools} = await buildWikiHelperTools(headers);
 
+        const model = contentModel || (title.endsWith("styles.css") ? EditContentFormat.css : (title.startsWith("Module:") ? EditContentFormat.lua : EditContentFormat.wikitext));
+        const sourceContent =  (model === EditContentFormat.wikitext && title.startsWith("Template:")) ? minifyMediaWikiHTML(source) : source;
+
         if (args.type === "create") {
           const callResult = await tools["create-page"].execute(
             {
               server,
-              source,
+              source: sourceContent,
               title,
               comment,
+              contentModel: model
             },
             {
               toolCallId: randomUUID(),
@@ -175,10 +196,11 @@ function uiRequestEditPageTool(server: McpServer): RegisteredTool {
         const callResult = await tools["update-page"].execute(
           {
             server,
-            source,
+            source: sourceContent,
             title,
             comment,
             section: section === "all" ? undefined : section,
+            contentModel: model
           },
           {
             toolCallId: randomUUID(),
@@ -210,17 +232,13 @@ export function createNewWikiTool(server: McpServer): RegisteredTool {
       "which can be used later to check the creation status. " +
       "Note: This does not immediately create the wiki, it only starts the creation task.",
     {
-      name: z.string().describe("The display name of the new wiki."),
+      name: z.string().describe("The display name of the new wiki. MUST be in English."),
       slug: z
         .string()
         .describe(
-          "The unique slug identifier for the wiki (used in subdomain)."
+          "The unique slug identifier for the wiki (used in subdomain). eg. for https://{slug}.pub.wiki/"
         ),
       language: z.string().describe("Language code, e.g. zh-hans, en."),
-      //template: z.string().describe('Optional: template wiki slug to base the new wiki on.').optional(),
-      //visibility: z.enum(['public', 'private', 'unlisted']).describe(
-      //	'Optional: visibility of the wiki. Default is public.'
-      //).optional()
     },
     {
       title: "Create wiki",
@@ -232,53 +250,6 @@ export function createNewWikiTool(server: McpServer): RegisteredTool {
         chatId: "unknown",
         headers: {},
       }) as { chatId: string; headers: Record<string, string> };
-      let data: any = null;
-      try {
-        data = await makeRestPostRequest(
-          `provisioner/v1/wikis`,
-          WIKIFRAM_ENDPOINT,
-          headers,
-          {
-            name,
-            slug,
-            language,
-          }
-        );
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Failed to create wiki: ${(error as Error).message}`,
-            } as TextContent,
-          ],
-          isError: true,
-        };
-      }
-
-      if (!data || !data.task_id) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Failed to create wiki: No data returned from API",
-            } as TextContent,
-          ],
-          isError: true,
-        };
-      }
-
-      if (data.error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Failed to create wiki: ${data.error.info}`,
-            } as TextContent,
-          ],
-          isError: true,
-        };
-      }
       return {
         content: [
           {
@@ -304,6 +275,7 @@ async function buildClients() {
   });
   uiShowOptionsTool(server);
   uiRequestEditPageTool(server);
+  createNewWikiTool(server);
   await server.connect(server_transport);
   return { server, client_transport };
 }
