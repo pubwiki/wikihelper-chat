@@ -88,6 +88,21 @@ export function ChatSidebar() {
   // Use TanStack Query to fetch chats
   const { chats, isLoading, deleteChat, refreshChats } = useChats(userId);
 
+  // Listen for userId updates from other components
+  useEffect(() => {
+    const handleUserIdUpdate = (event: CustomEvent<{ newUserId: string }>) => {
+      setUserId(event.detail.newUserId);
+      // 可选：手动刷新聊天记录（React Query 会自动处理，但这里确保立即刷新）
+      refreshChats();
+    };
+
+    window.addEventListener('userIdUpdated', handleUserIdUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('userIdUpdated', handleUserIdUpdate as EventListener);
+    };
+  }, [refreshChats]);
+
   // Start a new chat
   const handleNewChat = () => {
     router.push("/");

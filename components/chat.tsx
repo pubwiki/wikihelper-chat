@@ -110,7 +110,7 @@ export default function Chat() {
   const [uploading, setUploading] = useState(false);
 
   // Login logic
-  const [loginOpen, setLoginOpen] = useState(true);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [username, setUsername] = useState(((typeof window !== 'undefined')&&localStorage.getItem("username"))||"");
   const [password, setPassword] = useState(((typeof window !== 'undefined')&&localStorage.getItem("password"))||"");
   const [loginError, setLoginError] = useState("");
@@ -156,8 +156,9 @@ export default function Chat() {
       if(oldUserId!=newUserId){
         updateUserId(newUserId);
         setUserId(newUserId);
-        console.log("User ID updated successfully");
-        window.location.reload();
+        toast.success("User ID updated successfully");
+        // 发送自定义事件通知其他组件用户ID已更新
+        window.dispatchEvent(new CustomEvent('userIdUpdated', { detail: { newUserId } }));
       }
       localStorage.setItem("username",username)
       localStorage.setItem("password",password)
@@ -169,9 +170,18 @@ export default function Chat() {
     }
   };
 
-  // Initialize userId
+  // Initialize userId and check login status
   useEffect(() => {
-    setUserId(getUserId());
+    const currentUserId = getUserId();
+    setUserId(currentUserId);
+    
+    // Check if user needs to login
+    // If no username/password stored or no valid userId, show login
+    const storedUsername = typeof window !== 'undefined' ? localStorage.getItem("username") : null;
+    const storedPassword = typeof window !== 'undefined' ? localStorage.getItem("password") : null;
+    if(pubwikiCookies.length==0){
+      setLoginOpen(true);
+    }
   }, []);
 
   // Generate a chat ID if needed
