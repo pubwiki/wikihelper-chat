@@ -1,11 +1,19 @@
-version: "3.9"
 services:
   app:
-    build: 
-      context: .
-      args:
-        NEXT_PUBLIC_HOST: "pub.wiki"
+    image: wikichat:v1.0
     env_file:
       - .app.env
-    ports:
-      - "28080:3000"
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.wikichat.rule=Host(`chat.pub.wiki`)
+      - traefik.http.routers.wikichat.entrypoints=websecure
+      - traefik.http.routers.wikichat.service=wikichat
+      - traefik.http.services.wikichat.loadbalancer.server.port=3000
+      - traefik.http.routers.wikichat.tls.certresolver=cloudflare
+
+networks:
+  proxy:
+    external: true
+
