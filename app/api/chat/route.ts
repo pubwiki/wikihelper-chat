@@ -9,7 +9,6 @@ import { eq, and } from 'drizzle-orm';
 import { initializeMCPClients, type MCPServerConfig } from '@/lib/mcp-client';
 import { generateTitle } from '@/app/actions';
 
-import { checkBotId } from "botid/server";
 import { SYSTEM_PROMPT } from "@/lib/prompt";
 
 type UIMessageParts = UIMessage["parts"];
@@ -35,7 +34,6 @@ export async function POST(req: Request) {
 
   const reqJson = await req.json();
 
-  console.log("reqJson:",reqJson)
 
   const {
     messages,
@@ -54,15 +52,6 @@ export async function POST(req: Request) {
     appendHeaders?: Record<string, string>;
     appendParts?: UIMessageParts;
   } = reqJson;
-
-  const { isBot, isVerifiedBot } = await checkBotId();
-
-  if (isBot && !isVerifiedBot) {
-    return new Response(
-      JSON.stringify({ error: "Bot is not allowed to access this endpoint" }),
-      { status: 401, headers: { "Content-Type": "application/json" } }
-    );
-  }
 
   if (!userId) {
     return new Response(

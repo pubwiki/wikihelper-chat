@@ -37,7 +37,7 @@ import Image from "next/image";
 import { MCPServerManager } from "./mcp-server-manager";
 import { ApiKeyManager } from "./api-key-manager";
 import { ThemeToggle } from "./theme-toggle";
-import { getUserId, updateUserId } from "@/lib/user-id";
+import { getUserId } from "@/lib/user-id";
 import { useChats } from "@/lib/hooks/use-chats";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -51,20 +51,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
 import { useMCP } from "@/lib/context/mcp-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AnimatePresence, motion } from "motion/react";
-import { SIGN_UP_URL } from "@/lib/constants";
+
 
 export function ChatSidebar() {
   const router = useRouter();
@@ -75,12 +66,7 @@ export function ChatSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
 
-  //Login logic
-  const [loginOpen, setLoginOpen] = useState(true);
-  const [username, setUsername] = useState(((typeof window !== 'undefined')&&localStorage.getItem("username"))||"");
-  const [password, setPassword] = useState(((typeof window !== 'undefined')&&localStorage.getItem("password"))||"");
-  const [loginError, setLoginError] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
+
 
   // Get MCP server data from context
   const {
@@ -92,42 +78,7 @@ export function ChatSidebar() {
     setUserOptions
   } = useMCP();
 
-  const handleLogin = async () => {
-    setLoginLoading(true);
-    setLoginError("");
 
-    try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setLoginError(data.message || "登录失败");
-        return;
-      }
-
-      setPubwikiCookies(data.cookies);
-      const newUserId = data.userkey.trim()
-      const oldUserId = getUserId()
-
-      if(oldUserId!=newUserId){
-        updateUserId(newUserId);
-        setUserId(newUserId);
-        toast.success("User ID updated successfully");
-      }
-      localStorage.setItem("username",username)
-      localStorage.setItem("password",password)
-      setLoginOpen(false);
-    } catch (err) {
-      setLoginError("请求出错，请稍后再试");
-    } finally {
-      setLoginLoading(false);
-    }
-  };
 
   // Initialize userId
   useEffect(() => {
@@ -543,58 +494,7 @@ export function ChatSidebar() {
         />
       </SidebarFooter>
 
-      <Dialog
-        open={loginOpen}
-        onOpenChange={(open) => {
-          setLoginOpen(open);
-          if (!open) {
-            setUsername("");
-            setPassword("");
-            setLoginError("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-[400px]"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}>
-          <DialogHeader>
-            <DialogTitle>Login</DialogTitle>
-            <DialogDescription>
-              Please enter your credentials to access your account. <a className="text-blue-500 hover:underline" href={SIGN_UP_URL}>SIGN UP a new account</a>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-              />
-            </div>
 
-            {loginError && (
-              <p className="text-sm text-red-500 font-medium">{loginError}</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button onClick={handleLogin} disabled={loginLoading}>
-              {loginLoading ? "Logging in..." : "Login"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Sidebar>
   );
 }

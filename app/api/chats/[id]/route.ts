@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getChatById, deleteChat } from "@/lib/chat-store";
-import { checkBotId } from "botid/server";
 
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -8,7 +8,7 @@ import { ProjectOverview } from "./project-overview";
 import { Messages } from "./messages";
 import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
-import { getUserId } from "@/lib/user-id";
+import { getUserId, updateUserId } from "@/lib/user-id";
 import { useLocalStorage } from "@/lib/hooks/use-local-storage";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { convertToUIMessages } from "@/lib/chat-store";
@@ -32,13 +32,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@radix-ui/react-label";
+import { Input } from "@/components/ui/input";
 import { InfoTable } from "./info-table";
 import { Button } from "./ui/button";
 import { extendWikiHTML } from "@/lib/context/html-util";
 import { randomUUID } from "crypto";
 import { UIMessage } from "ai";
 import { Progess } from "./ui/progress";
-import { SITE_SUFFIX, WIKIFRAM_ENDPOINT } from "@/lib/constants";
+import { SITE_SUFFIX, WIKIFRAM_ENDPOINT, SIGN_UP_URL } from "@/lib/constants";
 import { parseWikiUrl } from "@/lib/common/utils";
 
 // Type for chat data from DB
@@ -108,6 +109,13 @@ export default function Chat() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // Login logic
+  const [loginOpen, setLoginOpen] = useState(true);
+  const [username, setUsername] = useState(((typeof window !== 'undefined')&&localStorage.getItem("username"))||"");
+  const [password, setPassword] = useState(((typeof window !== 'undefined')&&localStorage.getItem("password"))||"");
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
   // Get MCP server data from context
   const {
     getActiveServersForApi,
@@ -119,8 +127,47 @@ export default function Chat() {
     setPendingEditPageToolCall,
     pendingEditPageHTML,
     setPendingEditPageHTML,
-    pubwikiCookies
+    pubwikiCookies,
+    setPubwikiCookies
   } = useMCP();
+
+  const handleLogin = async () => {
+    setLoginLoading(true);
+    setLoginError("");
+
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setLoginError(data.message || "登录失败");
+        return;
+      }
+
+      setPubwikiCookies(data.cookies);
+      const newUserId = data.userkey.trim()
+      const oldUserId = getUserId()
+
+      if(oldUserId!=newUserId){
+        updateUserId(newUserId);
+        setUserId(newUserId);
+        console.log("User ID updated successfully");
+        window.location.reload();
+      }
+      localStorage.setItem("username",username)
+      localStorage.setItem("password",password)
+      setLoginOpen(false);
+    } catch (err) {
+      setLoginError("请求出错，请稍后再试");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
 
   // Initialize userId
   useEffect(() => {
@@ -409,6 +456,66 @@ export default function Chat() {
 
   const isLoading =
     status === "streaming" || status === "submitted" || isLoadingChat;
+
+  // Show login dialog if not logged in
+  if (loginOpen) {
+    return (
+      <>
+        <Dialog
+          open={loginOpen}
+          onOpenChange={(open) => {
+            setLoginOpen(open);
+            if (!open) {
+              setUsername("");
+              setPassword("");
+              setLoginError("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-[400px]"
+            onInteractOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}>
+            <DialogHeader>
+              <DialogTitle>Login</DialogTitle>
+              <DialogDescription>
+                Please enter your credentials to access your account. <a className="text-blue-500 hover:underline" href={SIGN_UP_URL}>SIGN UP a new account</a>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your username"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                />
+              </div>
+
+              {loginError && (
+                <p className="text-sm text-red-500 font-medium">{loginError}</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button onClick={handleLogin} disabled={loginLoading}>
+                {loginLoading ? "Logging in..." : "Login"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
 
   return (
     <div className="h-dvh flex flex-col justify-center w-full max-w-[430px] sm:max-w-3xl mx-auto px-4 sm:px-6 py-3">

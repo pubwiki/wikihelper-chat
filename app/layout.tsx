@@ -7,7 +7,6 @@ import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import "./globals.css";
-import { BotIdClient } from "botid/client";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -45,16 +44,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <BotIdClient
-          protect={[
-            {
-              path: "/api/chat",
-              method: "POST",
-            }
-          ]}
-        />
-      </head>
       <body className={`${inter.className}`}>
         <Providers>
           <div className="flex h-dvh w-full">
