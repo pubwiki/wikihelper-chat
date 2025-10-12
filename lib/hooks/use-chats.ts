@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { type Chat } from '@/lib/db/schema';
 import { toast } from 'sonner';
 
-export function useChats(userId: string) {
+export function useChats(userName: string) {
   const queryClient = useQueryClient();
 
   // Main query to fetch chats
@@ -12,13 +12,13 @@ export function useChats(userId: string) {
     error,
     refetch
   } = useQuery<Chat[]>({
-    queryKey: ['chats', userId],
+    queryKey: ['chats', userName],
     queryFn: async () => {
-      if (!userId) return [];
+      if (userName=="") return [];
 
       const response = await fetch('/api/chats', {
         headers: {
-          'x-user-id': userId
+          'x-user-id': userName
         }
       });
 
@@ -28,7 +28,7 @@ export function useChats(userId: string) {
 
       return response.json();
     },
-    enabled: !!userId, // Only run query if userId exists
+    enabled: !!userName, // Only run query if userId exists
     staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
     refetchOnWindowFocus: true, // Refetch when window regains focus
   });
@@ -39,7 +39,7 @@ export function useChats(userId: string) {
       const response = await fetch(`/api/chats/${chatId}`, {
         method: 'DELETE',
         headers: {
-          'x-user-id': userId
+          'x-user-id': userName
         }
       });
 
@@ -51,7 +51,7 @@ export function useChats(userId: string) {
     },
     onSuccess: (deletedChatId) => {
       // Update cache by removing the deleted chat
-      queryClient.setQueryData<Chat[]>(['chats', userId], (oldChats = []) =>
+      queryClient.setQueryData<Chat[]>(['chats', userName], (oldChats = []) =>
         oldChats.filter(chat => chat.id !== deletedChatId)
       );
 
@@ -65,7 +65,7 @@ export function useChats(userId: string) {
 
   // Function to invalidate chats cache for refresh
   const refreshChats = () => {
-    queryClient.invalidateQueries({ queryKey: ['chats', userId] });
+    queryClient.invalidateQueries({ queryKey: ['chats', userName] });
   };
 
   return {

@@ -1,7 +1,7 @@
 "use client";
 
-import Chat from "@/components/chat";
-import { getUserId } from "@/lib/user-id";
+import WrapLoginChat from "@/components/wrap-login-chat";
+import { useMCP } from "@/lib/context/mcp-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useEffect } from "react";
@@ -10,24 +10,24 @@ export default function ChatPage() {
   const params = useParams();
   const chatId = params?.id as string;
   const queryClient = useQueryClient();
-  const userId = getUserId();
+  const {userStatus} = useMCP();
 
   // Prefetch chat data
   useEffect(() => {
     async function prefetchChat() {
-      if (!chatId || !userId) return;
+      if (!chatId || !userStatus) return;
 
       // Check if data already exists in cache
-      const existingData = queryClient.getQueryData(["chat", chatId, userId]);
+      const existingData = queryClient.getQueryData(["chat", chatId, userStatus.username]);
       if (existingData) return;
 
       // Prefetch the data
       await queryClient.prefetchQuery({
-        queryKey: ["chat", chatId, userId] as const,
+        queryKey: ["chat", chatId, userStatus.username] as const,
         queryFn: async () => {
           const response = await fetch(`/api/chats/${chatId}`, {
             headers: {
-              "x-user-id": userId,
+              "x-user-id": userStatus.username,
             },
           });
 
@@ -51,7 +51,7 @@ export default function ChatPage() {
     }
 
     prefetchChat();
-  }, [chatId, userId, queryClient]);
+  }, [chatId, userStatus, queryClient]);
 
-  return <Chat />;
+  return <WrapLoginChat />;
 }

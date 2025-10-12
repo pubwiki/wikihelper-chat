@@ -1,5 +1,7 @@
-import Chat from "@/components/chat";
+"use client";
+
+import WrapLoginChat from "@/components/wrap-login-chat";
 
 export default function Page() {
-  return <Chat />;
+  return <WrapLoginChat />;
 }

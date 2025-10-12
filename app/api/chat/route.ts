@@ -30,6 +30,37 @@ function sanitizeMessages(messages: UIMessage[]): UIMessage[] {
   });
 }
 
+function checkAndSimplifyMessages(messages: UIMessage[]): UIMessage[] {
+  let textLength = 0;
+  for (const msg of messages) {
+    for (const part of msg.parts) {
+      if (part.type === "text") {
+        textLength += part.text.length;
+      }else if (part.type === "tool-invocation") {
+        const json = JSON.stringify(part.toolInvocation);
+        textLength += json.length;
+      }
+    }
+  }
+
+  if(textLength <= 100000){
+    return messages;
+  }
+  console.log("Simplifying messages, total text length:", textLength);
+  // Simplify messages by keeping only text parts and removing tool-invocation parts
+  const simplified = messages.map((msg, i) => {
+    // keep last 2 message
+    if(i >= messages.length - 2){
+      return msg;
+    }
+    const newParts = msg.parts.filter(part => part.type === "text");
+    return { ...msg, parts: newParts };
+  });
+
+  return simplified;
+
+}
+
 export async function POST(req: Request) {
 
   const reqJson = await req.json();
@@ -126,11 +157,12 @@ export async function POST(req: Request) {
   let responseCompleted = false;
   
   const sanitizedMessages = sanitizeMessages(messages);
+  const finalMessages = checkAndSimplifyMessages(sanitizedMessages);
 
   const result = streamText({
     model: model.languageModel(selectedModel),
     system: SYSTEM_PROMPT,
-    messages: sanitizedMessages,
+    messages: finalMessages,
     tools,
     maxSteps: 50,
     experimental_transform: smoothStream({
@@ -186,6 +218,7 @@ export async function POST(req: Request) {
         if (error.message.includes("Rate limit")) {
           return "Rate limit exceeded. Please try again later.";
         }
+        return error.message;
       }
       console.error(error);
       return "An error occurred.";

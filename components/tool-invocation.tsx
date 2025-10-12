@@ -10,8 +10,11 @@ import {
   Code,
   ArrowRight,
   Circle,
+  SquarePen,
+  Cable,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseWikiUrl } from "@/lib/common/utils";
 
 interface ToolInvocationProps {
   toolName: string;
@@ -20,7 +23,40 @@ interface ToolInvocationProps {
   result: any;
   isLatestMessage: boolean;
   status: string;
+  showRefCallback: ((args: { title: string; source: string, server:string, contentModel:string }) => void) | undefined;
 }
+
+const RunningToolNameMap: Record<
+  string,
+  (args: Record<string, string>) => string
+> = {
+  "edit-page": (args) =>
+    `${args.type == "create" ? "Creating" : "Editing"} Wiki Page: ${
+      args.title
+    }`,
+  "get-page": (args) => `Fetching Wiki Page: ${args.title}`,
+  "set-target-wiki": (args) => `Setting Target Wiki to: ${args.server}`,
+  "list-all-page-titles": (args) => `Listing All Page Titles`,
+  "upload-image": (args) => `Uploading Image: ${args.filename}`,
+  "load-world": (args) => `Loading Wiki Site: ${args.server}`,
+  "create-new-wiki-site": (args) => `Creating New Wiki Site: ${args.slug}`,
+};
+
+const ResultToolNameMap: Record<
+  string,
+  (args: Record<string, string>) => string
+> = {
+  "edit-page": (args) =>
+    `${args.type == "create" ? "Created" : "Edited"} Wiki Page`,
+  "get-page": (args) => `Fetched Wiki Page`,
+  "set-target-wiki": (args) => `Set Target Wiki to: ${args.server})`,
+  "list-all-page-titles": (args) => `Listed All Page Titles`,
+  "upload-image": (args) => `Uploaded Image: ${args.filename}`,
+  "load-world": (args) => `Loaded Wiki Site: ${args.server}`,
+  "create-new-wiki-site": (args) => `Created New Wiki Site: ${args.slug}`,
+};
+
+const ShowRefPageFooterNames = ["edit-page", "get-page"];
 
 export function ToolInvocation({
   toolName,
@@ -29,8 +65,28 @@ export function ToolInvocation({
   result,
   isLatestMessage,
   status,
+  showRefCallback,
 }: ToolInvocationProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const HiddenToolNames = ["ui-show-options"];
+  const getToolDisplayName = () => {
+    if (state == "call") {
+      if (toolName in RunningToolNameMap) {
+        return (
+          RunningToolNameMap[toolName](args) ?? `Running MCP tool: ${toolName}`
+        );
+      }
+    } else {
+      if (toolName in ResultToolNameMap) {
+        return (
+          ResultToolNameMap[toolName](args) ??
+          `${result.isError ? "[Failed] " : ""} Completed MCP tool: ${toolName}`
+        );
+      }
+    }
+    return toolName;
+  };
+
 
   const getStatusIcon = () => {
     if (state === "call") {
@@ -70,7 +126,16 @@ export function ToolInvocation({
     }
   };
 
-  return (
+  const showRefPageFooter =
+    ShowRefPageFooterNames.includes(toolName) &&
+    state === "result" &&
+    !result.isError &&
+    args.title;
+  const url = showRefPageFooter
+    ? `${parseWikiUrl(args.server)}wiki/${args.title}`
+    : undefined;
+
+  return HiddenToolNames.includes(toolName) ? null : (
     <div
       className={cn(
         "flex flex-col mb-2 rounded-md border border-border/50 overflow-hidden",
@@ -90,7 +155,7 @@ export function ToolInvocation({
         </div>
         <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground flex-1">
           <span className="text-foreground font-semibold tracking-tight">
-            {toolName}
+            {getToolDisplayName()}
           </span>
           <ArrowRight className="h-3 w-3 text-muted-foreground/50" />
           <span className={cn("font-medium", getStatusClass())}>
@@ -148,6 +213,64 @@ export function ToolInvocation({
               </pre>
             </div>
           )}
+        </div>
+      )}
+
+      {showRefPageFooter && (
+        <div className="flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors text-xs">
+          <div className="flex items-center justify-center rounded-full w-5 h-5 text-muted-foreground/70">
+            <Cable className="h-3.5 w-3.5" />
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+            <span className="font-medium"> {args.title}</span>
+          </div>
+          <div className="px-2 py-1 bg-muted/50 rounded-md border border-border/30 hover:bg-muted/70 transition-colors">
+            <a
+              onClick={() => {
+                if (!showRefCallback) return;
+                if (toolName == "edit-page") {
+                  showRefCallback({ title: args.title, source: args.content, server: args.server, contentModel: args.contentModel });
+                } else {
+                  if (
+                    result.content &&
+                    result.content[1] &&
+                    result.content[1].text &&
+                    result.content[1].text.startsWith("Source:")
+                  ) {
+                    showRefCallback({
+                      title: args.title,
+                      source: result.content[1].text,
+                      server: args.server,
+                      contentModel: 'wikitext'
+                    });
+                  }
+                }
+              }}
+              className="text-muted-foreground"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Reference
+            </a>
+          </div>
+          <div className="px-2 py-1 bg-muted/50 rounded-md border border-border/30 hover:bg-muted/70 transition-colors">
+            <a
+              href={url}
+              className="text-muted-foreground"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View
+            </a>
+          </div>
+          <div className="px-2 py-1 bg-muted/50 rounded-md border border-border/30 hover:bg-muted/70 transition-colors">
+            <a
+              onClick={() => navigator.clipboard.writeText(url!)}
+              className="text-muted-foreground"
+            >
+              Copy URL
+            </a>
+          </div>
         </div>
       )}
     </div>

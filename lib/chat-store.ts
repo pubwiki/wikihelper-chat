@@ -248,6 +248,7 @@ export async function getChats(userId: string) {
 }
 
 export async function getChatById(id: string, userId: string): Promise<ChatWithMessages | null> {
+  console.log("Fetching chat:", {id, userId});
   const chat = await db.query.chats.findFirst({
     where: and(
       eq(chats.id, id),

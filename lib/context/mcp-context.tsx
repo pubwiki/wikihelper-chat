@@ -42,7 +42,7 @@ export interface MCPServer {
   errorMessage?: string;
   tools?: MCPTool[];
   builtIn?: boolean; // Indicates if the server is a built-in option
-  onFetchHeader?:()=>KeyValuePair[],
+  onFetchHeader?: () => KeyValuePair[];
 }
 
 export interface MCPServerApi {
@@ -51,45 +51,68 @@ export interface MCPServerApi {
   headers?: KeyValuePair[];
 }
 
-
-
 export interface CreateWikiArgs {
   name: string;
   slug: string;
   language: string;
 }
 
-export interface CreateWikiStatus{
+export interface CreateWikiStatus {
   args: CreateWikiArgs;
-  resultStatus:"succeeded"|"failed"|"in-progress"|"waiting-confirmation";
-  status?: "queued"|"running";
-  phase?: "dir_copy" | "render_ini" | "db_provision" | "oauth" | "docker_install" | "docker_index_cfg" | "flip_bootstrap" | "index",
+  resultStatus: "succeeded" | "failed" | "in-progress" | "waiting-confirmation";
+  status?: "queued" | "running";
+  phase?:
+    | "dir_copy"
+    | "render_ini"
+    | "db_provision"
+    | "oauth"
+    | "docker_install"
+    | "docker_index_cfg"
+    | "flip_bootstrap"
+    | "index";
   message?: string;
 }
 
 export type CreateWikiSSEProgressMessage = {
-  type:"progress",
-  status:"queued"|"running",
-  message?:string,
-  phase?:"dir_copy" | "render_ini" | "db_provision" | "oauth" | "docker_install" | "docker_index_cfg" | "flip_bootstrap" | "index"
-}
+  type: "progress";
+  status: "queued" | "running";
+  message?: string;
+  phase?:
+    | "dir_copy"
+    | "render_ini"
+    | "db_provision"
+    | "oauth"
+    | "docker_install"
+    | "docker_index_cfg"
+    | "flip_bootstrap"
+    | "index";
+};
 export type CreateWikiSSEStatusMessage = {
-  type:"status",
-  status:"succeeded"|"failed",
-  message?:string
-}
-
+  type: "status";
+  status: "succeeded" | "failed";
+  message?: string;
+};
 
 export interface EditWikiPageArgs {
   server: string; // MCP server
-  source: string; // wikitext source
+  content: string; // wikitext source
   title: string; // page title
   comment?: string; // edit comment
-  type:"create" | "update";
+  editType: "create" | "update";
   contentModel?: string; // content model, default to "wikitext"
 }
 
-export type UserOptionBtn = {title:string,action:string}
+export type PresetOption = {
+  type: "load-wiki";
+  title: string;
+};
+
+export type UserStatus = {
+  username: string;
+  pubwikiCookie: string[];
+};
+
+export type UserOptionBtn = { title: string; action: string };
 
 interface MCPContextType {
   mcpServers: MCPServer[];
@@ -105,24 +128,30 @@ interface MCPContextType {
     errorMessage?: string
   ) => void;
   getActiveServersForApi: () => MCPServerApi[];
-  pubwikiCookies:string[],
-  setPubwikiCookies: (cookies:string[]) => void,
-  userOptions: UserOptionBtn[],
-  setUserOptions: (opts:UserOptionBtn[]) => void,
+  userStatus?: UserStatus;
+  setUserStatus: (status: UserStatus) => void;
+  userOptions: UserOptionBtn[];
+  setUserOptions: (opts: UserOptionBtn[]) => void;
   createWikiStatus: CreateWikiStatus | undefined;
   pendingEditPageToolCall: null | {
     type: "create" | "update";
     args: EditWikiPageArgs;
   };
   setCreateWikiStatus: (value: CreateWikiStatus | undefined) => void;
-  setPendingEditPageToolCall: (value: null | {
-    type: "create" | "update";
-    args: EditWikiPageArgs;
-  }) => void;
-  pendingEditPageHTML:string,
-  setPendingEditPageHTML:(html:string)=>void,
-  loadWikiHistory:string[],
-  setLoadWikiHistory:(history:string[])=>void,
+  setPendingEditPageToolCall: (
+    value: null | {
+      type: "create" | "update";
+      args: EditWikiPageArgs;
+    }
+  ) => void;
+  pendingEditPageHTML: string;
+  setPendingEditPageHTML: (html: string) => void;
+  presetOptions: PresetOption[];
+  setPresetOptions: (options: PresetOption[]) => void;
+  fetchWithAuth: (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ) => Promise<Response>;
 }
 
 const MCPContext = createContext<MCPContextType | undefined>(undefined);
@@ -133,10 +162,10 @@ async function checkServerHealth(
   headers?: KeyValuePair[]
 ): Promise<{ ready: boolean; tools?: MCPTool[]; error?: string }> {
   try {
-    const response = await fetch('/api/mcp-health', {
-      method: 'POST',
+    const response = await fetch("/api/mcp-health", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ url, headers }),
     });
@@ -147,51 +176,58 @@ async function checkServerHealth(
     console.error(`Error checking server health for ${url}:`, error);
     return {
       ready: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }
 
 export function MCPProvider({ children }: { children: React.ReactNode }) {
   const builtInServers = getBuiltInServers();
-  const builtInServersId = builtInServers.map(s=>s.id);
+  const builtInServersId = builtInServers.map((s) => s.id);
   const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
     STORAGE_KEYS.MCP_SERVERS,
     [],
-    (s)=>{
-      return s.filter((ss)=>!builtInServersId.includes(ss.id)).filter((ss)=>!ss.builtIn).concat(
-        builtInServers.map((bs)=>{
-          const find = s.find((server) => server.id === bs.id)
-          if(find){
-            return {
-              ...bs,
-              status:find.status,
-              tools:find.tools
+    (s) => {
+      return s
+        .filter((ss) => !builtInServersId.includes(ss.id))
+        .filter((ss) => !ss.builtIn)
+        .concat(
+          builtInServers.map((bs) => {
+            const find = s.find((server) => server.id === bs.id);
+            if (find) {
+              return {
+                ...bs,
+                status: find.status,
+                tools: find.tools,
+              };
             }
-          }
-          return bs
-        }
-      ))
+            return bs;
+          })
+        );
     }
   );
-  const [loadWikiHistory,setLoadWikiHistory] = useLocalStorage<string[]>(STORAGE_KEYS.LOAD_WIKI_HISTORY, []);
-  const [pubwikiCookies, setPubwikiCookies] = useState<string[]>([]);
-  const [userOptions,setUserOptions] = useState<UserOptionBtn[]>([]);
+
+  const [presetOptions, setPresetOptions] = useState<PresetOption[]>([]);
+  const [userStatus, setUserStatus] = useState<UserStatus | undefined>(
+    undefined
+  );
+  const [userOptions, setUserOptions] = useState<UserOptionBtn[]>([]);
   const [createWikiStatus, setCreateWikiStatus] = useState<
     CreateWikiStatus | undefined
   >(undefined);
-  const [pendingEditPageToolCall, setPendingEditPageToolCall] = useState<null | {
-    type: "create" | "update";
-    args: EditWikiPageArgs;
-  }>(null);
+  const [pendingEditPageToolCall, setPendingEditPageToolCall] =
+    useState<null | {
+      type: "create" | "update";
+      args: EditWikiPageArgs;
+    }>(null);
 
-  const [pendingEditPageHTML,setPendingEditPageHTML] = useState<string>("");
+  const [pendingEditPageHTML, setPendingEditPageHTML] = useState<string>("");
 
   const [selectedMcpServers, setSelectedMcpServers] = useLocalStorage<string[]>(
     STORAGE_KEYS.SELECTED_MCP_SERVERS,
     [],
-    (s)=>{
-      return s.filter((id) => !s.includes(id)).concat(builtInServersId)
+    (s) => {
+      return s.filter((id) => !s.includes(id)).concat(builtInServersId);
     }
   );
 
@@ -201,6 +237,23 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
   // Helper to get a server by ID
   const getServerById = (serverId: string): MCPServer | undefined => {
     return mcpServers.find((server) => server.id === serverId);
+  };
+
+  const fetchWithAuth = async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ) => {
+    const res = await fetch(input, {
+      credentials: "include", // 自动带上 JWT Cookie
+      ...init,
+    });
+
+    if (res.status === 401) {
+      setUserStatus(undefined);
+      return Promise.reject(new Error("Unauthorized"));
+    }
+
+    return res;
   };
 
   // Update server status
@@ -277,7 +330,7 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
       }
 
       const healthResult = await checkServerHealth(server.url, server.headers);
-      
+
       if (healthResult.ready && healthResult.tools) {
         updateServerWithTools(serverId, healthResult.tools, "connected");
         activeServersRef.current[serverId] = true;
@@ -314,7 +367,12 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
       setMcpServers((currentServers) =>
         currentServers.map((s) =>
           s.id === serverId
-            ? { ...s, status: "disconnected", tools: undefined, errorMessage: undefined }
+            ? {
+                ...s,
+                status: "disconnected",
+                tools: undefined,
+                errorMessage: undefined,
+              }
             : s
         )
       );
@@ -327,20 +385,19 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
 
   // Calculate mcpServersForApi based on current state
   const mcpServersForApi = getActiveServersForApi();
-  
+
   const initializedRef = useRef(false);
-  
 
   useEffect(() => {
     if (initializedRef.current) return;
-    if (mcpServers.length === 0) return; 
+    if (mcpServers.length === 0) return;
 
     initializedRef.current = true;
 
     const init = async () => {
       for (const sid of builtInServersId) {
         const server = getServerById(sid);
-        console.log(mcpServers)
+        console.log(mcpServers);
         if (server) {
           await startServer(sid);
         }
@@ -353,8 +410,8 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
   return (
     <MCPContext.Provider
       value={{
-        pubwikiCookies,
-        setPubwikiCookies,
+        userStatus,
+        setUserStatus,
         mcpServers,
         setMcpServers,
         selectedMcpServers,
@@ -369,11 +426,12 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
         createWikiStatus,
         setCreateWikiStatus,
         pendingEditPageToolCall,
-        setPendingEditPageToolCall, 
+        setPendingEditPageToolCall,
         pendingEditPageHTML,
         setPendingEditPageHTML,
-        loadWikiHistory,
-        setLoadWikiHistory,
+        presetOptions,
+        setPresetOptions,
+        fetchWithAuth
       }}
     >
       {children}

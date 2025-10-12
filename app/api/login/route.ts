@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import fetch from "node-fetch";
-import crypto from "crypto";
+import { cookies as setCookie } from "next/headers";
 import { API_BACKEND } from "@/lib/constants";
+import { signAnonJWT } from "@/lib/jwt-token";
 
 function getRetCookie(setCookieHeaders: string[] | string | null, cookies: string[]) {
   if (!setCookieHeaders) return cookies;
@@ -96,18 +97,20 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+      const jwt = await signAnonJWT(30 * 60);
 
-    // 生成 userkey（salt + hash）
-    const salt = process.env.USERKEY_SALT || "+pubwiki_salt"; 
-    const userkey = crypto
-      .createHash("sha256")
-      .update(cookieMap["pubwikiUserName"] + salt)
-      .digest("hex");
+    (await setCookie()).set("anon_jwt", jwt, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      path: "/",
+      maxAge: 30 * 60,
+    });
+
 
     return NextResponse.json({
       success: true,
       cookies,
-      userkey,
     });
   } catch (error: any) {
     console.error("Login error:", error);

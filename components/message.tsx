@@ -133,11 +133,13 @@ const PurePreviewMessage = ({
   message,
   isLatestMessage,
   status,
+  showRefCallback,
 }: {
   message: TMessage;
   isLoading: boolean;
   status: "error" | "submitted" | "streaming" | "ready";
   isLatestMessage: boolean;
+  showRefCallback: ((args: { title: string; source: string, server:string, contentModel:string }) => void) | undefined;
 }) => {
   // Create a string with all text parts for copy functionality
   const getMessageText = () => {
@@ -221,6 +223,7 @@ const PurePreviewMessage = ({
                     result={result}
                     isLatestMessage={isLatestMessage}
                     status={status}
+                    showRefCallback={showRefCallback}
                   />
                 );
               case "reasoning":

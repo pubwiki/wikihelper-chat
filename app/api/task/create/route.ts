@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   try {
     const { slug, language, name, reqcookie } = await req.json() as {slug: string, language: string, name: string, reqcookie: string};
     const backendUrl = `${WIKIFRAM_ENDPOINT}provisioner/v1/wikis`;
-
+    console.log("Creating wiki with:", { slug, language, name, reqcookie });
     if (!slug || !language || !name) {
       return NextResponse.json({ error: "Missing slug, language or name" }, { status: 400 });
     }
@@ -20,10 +20,14 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({ slug, language, name }),
     });
     const rtext = await res.text();
-    console.log("Create Wiki Response:", rtext);
+    console.log("Create wiki response text:", rtext);
     const result = JSON.parse(rtext);
+
     const { task_id } = result;
-    console.log(result)
+
+    if (result.error || !task_id) {
+      throw new Error( `${result.error}: ${result.message}` || "Failed to create wiki");
+    }
 
     return NextResponse.json({ ok: true, taskId: task_id });
   } catch (err: any) {

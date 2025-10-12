@@ -37,7 +37,6 @@ import Image from "next/image";
 import { MCPServerManager } from "./mcp-server-manager";
 import { ApiKeyManager } from "./api-key-manager";
 import { ThemeToggle } from "./theme-toggle";
-import { getUserId } from "@/lib/user-id";
 import { useChats } from "@/lib/hooks/use-chats";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -56,17 +55,13 @@ import { useMCP } from "@/lib/context/mcp-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AnimatePresence, motion } from "motion/react";
 
-
 export function ChatSidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const [userId, setUserId] = useState<string>("");
   const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
   const [apiKeySettingsOpen, setApiKeySettingsOpen] = useState(false);
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
-
-
 
   // Get MCP server data from context
   const {
@@ -74,34 +69,14 @@ export function ChatSidebar() {
     setMcpServers,
     selectedMcpServers,
     setSelectedMcpServers,
-    setPubwikiCookies,
-    setUserOptions
+    setUserOptions,
+    userStatus
   } = useMCP();
 
 
-
-  // Initialize userId
-  useEffect(() => {
-    setUserId(getUserId());
-  }, []);
-
   // Use TanStack Query to fetch chats
-  const { chats, isLoading, deleteChat, refreshChats } = useChats(userId);
+  const { chats, isLoading, deleteChat } = useChats(userStatus?.username||"");
 
-  // Listen for userId updates from other components
-  useEffect(() => {
-    const handleUserIdUpdate = (event: CustomEvent<{ newUserId: string }>) => {
-      setUserId(event.detail.newUserId);
-      // 可选：手动刷新聊天记录（React Query 会自动处理，但这里确保立即刷新）
-      refreshChats();
-    };
-
-    window.addEventListener('userIdUpdated', handleUserIdUpdate as EventListener);
-    
-    return () => {
-      window.removeEventListener('userIdUpdated', handleUserIdUpdate as EventListener);
-    };
-  }, [refreshChats]);
 
   // Start a new chat
   const handleNewChat = () => {
@@ -125,9 +100,8 @@ export function ChatSidebar() {
   // Get active MCP servers status
   const activeServersCount = selectedMcpServers.length;
 
-
   // Show loading state if user ID is not yet initialized
-  if (!userId) {
+  if (!userStatus) {
     return null; // Or a loading spinner
   }
 
@@ -387,7 +361,7 @@ export function ChatSidebar() {
                 >
                   <Avatar className="h-6 w-6 rounded-lg bg-secondary/60">
                     <AvatarFallback className="rounded-lg text-xs font-medium text-secondary-foreground">
-                      {userId.substring(0, 2).toUpperCase()}
+                      {userStatus?.username.substring(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
@@ -399,7 +373,7 @@ export function ChatSidebar() {
                   <div className="flex items-center gap-2">
                     <Avatar className="h-7 w-7 rounded-lg bg-secondary/60">
                       <AvatarFallback className="rounded-lg text-sm font-medium text-secondary-foreground">
-                        {userId.substring(0, 2).toUpperCase()}
+                        {userStatus?.username.substring(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid text-left text-sm leading-tight">
@@ -407,7 +381,7 @@ export function ChatSidebar() {
                         User ID
                       </span>
                       <span className="truncate text-xs text-muted-foreground">
-                        {userId.substring(0, 16)}...
+                        {userStatus?.username.substring(0, 16)}...
                       </span>
                     </div>
                   </div>
@@ -425,7 +399,7 @@ export function ChatSidebar() {
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="h-8 w-8 rounded-lg bg-secondary/60">
                     <AvatarFallback className="rounded-lg text-sm font-medium text-secondary-foreground">
-                      {userId.substring(0, 2).toUpperCase()}
+                      {userStatus?.username.substring(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
@@ -433,7 +407,7 @@ export function ChatSidebar() {
                       User ID
                     </span>
                     <span className="truncate text-xs text-muted-foreground">
-                      {userId}
+                      {userStatus?.username}
                     </span>
                   </div>
                 </div>
@@ -443,7 +417,7 @@ export function ChatSidebar() {
                 <DropdownMenuItem
                   onSelect={(e) => {
                     e.preventDefault();
-                    navigator.clipboard.writeText(userId);
+                    navigator.clipboard.writeText(userStatus?.username||"");
                     toast.success("User ID copied to clipboard");
                   }}
                 >
@@ -462,24 +436,28 @@ export function ChatSidebar() {
                   <Settings className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
                   MCP Settings
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setApiKeySettingsOpen(true);
-                  }}
-                >
-                  <Key className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
-                  API Keys
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    window.open("https://git.new/s-mcp", "_blank");
-                  }}
-                >
-                  <Github className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
-                  GitHub
-                </DropdownMenuItem>
+                {false && (
+                  <>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setApiKeySettingsOpen(true);
+                      }}
+                    >
+                      <Key className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
+                      API Keys
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        window.open("https://git.new/s-mcp", "_blank");
+                      }}
+                    >
+                      <Github className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
+                      GitHub
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center">
@@ -508,8 +486,6 @@ export function ChatSidebar() {
           onOpenChange={setApiKeySettingsOpen}
         />
       </SidebarFooter>
-
-
     </Sidebar>
   );
 }

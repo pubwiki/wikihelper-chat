@@ -3,6 +3,7 @@ import { Textarea as ShadcnTextarea } from "@/components/ui/textarea";
 import { ArrowUp, Loader2 } from "lucide-react";
 import { ModelPicker } from "./model-picker";
 import { ImageUpload } from "./image-upload";
+import { RefMark } from "./ref-mark";
 
 interface InputProps {
   input: string;
@@ -15,6 +16,8 @@ interface InputProps {
   imageFile: File | null;
   setImageFile: (file: File | null) => void;
   isUploading: boolean;
+  refMark: string | null;
+  setRefMark: (refMark: string | null) => void;
 }
 
 export const Textarea = ({
@@ -27,7 +30,9 @@ export const Textarea = ({
   setSelectedModel,
   imageFile,
   setImageFile,
-  isUploading
+  isUploading,
+  refMark,
+  setRefMark
 }: InputProps) => {
   const isStreaming = status === "streaming" || status === "submitted";
 
@@ -37,7 +42,7 @@ export const Textarea = ({
         className="resize-none bg-background/50 dark:bg-muted/50 backdrop-blur-sm w-full rounded-2xl pr-12 pt-4 pb-16 border-input focus-visible:ring-ring placeholder:text-muted-foreground"
         value={input}
         autoFocus
-        placeholder="Send a message..."
+        placeholder="Press Shift + Enter to insert a new line, press Enter to send new message."
         onChange={handleInputChange}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !(e.shiftKey || e.ctrlKey) && !isLoading && input.trim()) {
@@ -66,6 +71,7 @@ export const Textarea = ({
         selectedModel={selectedModel}
       />
       <ImageUpload imageFile={imageFile} setImageFile={setImageFile} />
+      <RefMark refMark={refMark} setRefMark={setRefMark} />
 
       <button
         type={ (isStreaming || isUploading) ? "button" : "submit"}

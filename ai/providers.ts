@@ -1,6 +1,7 @@
 import { createQwen } from 'qwen-ai-provider';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createDeepSeek } from '@ai-sdk/deepseek';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import {
   customProvider
 } from "ai";
@@ -28,12 +29,17 @@ const deepSeekClient = createDeepSeek({
   apiKey: process.env.DEEPSEEK_API_KEY,
 });
 
+const geminiClient = createOpenAICompatible({
+  name:"gemini",
+  apiKey: process.env.GEMINI_API_KEY,
+  baseURL:"http://andaoapi.top/v1"
+})
 
 const languageModels = {
   "qwen-plus": qwenClient('qwen-plus-latest'),
   "gpt-5": openaiClient('gpt-5-2025-08-07'),
   "deepseek": deepSeekClient('deepseek-chat'),
-
+  "gemini-2.5-pro": geminiClient('gemini-2.5-pro')
 };
 
 export const modelDetails: Record<keyof typeof languageModels, ModelInfo> = {
@@ -56,7 +62,14 @@ export const modelDetails: Record<keyof typeof languageModels, ModelInfo> = {
     name: "GPT-5",
     description: "The latest GPT-5 model released by OpenAI, featuring stronger comprehension and generation abilities, suitable for a wide range of complex tasks.",
     apiVersion: "gpt-5-2025-08-07",
-    capabilities: ["Advanced", "Versatile", "Agentic"] 
+    capabilities: ["Advanced", "Versatile", "Agentic"]
+  },
+  "gemini-2.5-pro": {
+    provider: "Gemini",
+    name: "Gemini-2.5-Pro",
+    description: "Gemini's advanced language model optimized for chat applications, providing high-quality responses with a focus on understanding context and user intent.",
+    apiVersion: "gemini-2.5-pro",
+    capabilities: ["Balanced", "Efficient", "Agentic"]
   }
 };
 

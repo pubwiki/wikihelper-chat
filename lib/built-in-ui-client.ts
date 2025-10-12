@@ -97,6 +97,11 @@ function uiShowOptionsTool(server: McpServer): RegisteredTool {
     }
   );
 }
+function toNumber(value:string|undefined, defaultValue:any) {
+  if (value === undefined) return defaultValue;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : defaultValue;
+}
 
 function uiRequestEditPageTool(server: McpServer): RegisteredTool {
   return server.tool(
@@ -115,23 +120,23 @@ function uiRequestEditPageTool(server: McpServer): RegisteredTool {
         .describe(
           "The host URL of target wiki for this session, e.g. https://{WIKI_ID}.pub.wiki/."
         ),
-      type: z
+      editType: z
         .enum(["create", "update"])
         .describe(
           "Type of change: create a new page or update an existing one."
         ),
       title: z.string().describe("Wiki page title to be changed."),
-      source: z
+      content: z
         .string()
         .describe("Proposed new content (full page or specific section)."),
       section: z
-        .union([z.string(), z.number()])
+        .string()
         .describe(
-          'Section identifier for incremental edits: "new" to add a new section, "0" for the lead section, or a section index. ' +
+          'Section identifier for incremental edits: "new" to add a new section, "0" for the lead section, or a section index like "1" or "2". ' +
             'If input "all", the entire page will be replaced or created. Prefer section edits whenever possible.'
         ).optional(),
       comment: z.string().describe("Optional edit summary.").optional(),
-      contentModel: z.nativeEnum( EditContentFormat ).describe( "Format of the page content to edit. default to 'wikitext', when editing css, use 'sanitized-css', when editing lua, use 'Scribunto'" ).optional().default( EditContentFormat.wikitext )
+      contentModel: z.nativeEnum( EditContentFormat ).describe( "Format of the page content to edit. default to 'wikitext', when editing css, use 'sanitized-css', when editing lua, use 'Scribunto'" ).optional().default( EditContentFormat.wikitext ),
     },
     {
       title: "Request Change Confirmation",
@@ -139,7 +144,8 @@ function uiRequestEditPageTool(server: McpServer): RegisteredTool {
       destructiveHint: false,
     } as ToolAnnotations,
     async (args, extra) => {
-      const { title, source, comment, server, section, contentModel } = args;
+      const { title, content, comment, server, section, contentModel } = args;
+      const source = content;
       const { chatId, headers } = (extra._meta || {
         chatId: "unknown",
         headers: {},
@@ -173,7 +179,7 @@ function uiRequestEditPageTool(server: McpServer): RegisteredTool {
         const model = contentModel || (title.endsWith("styles.css") ? EditContentFormat.css : (title.startsWith("Module:") ? EditContentFormat.lua : EditContentFormat.wikitext));
         const sourceContent =  (model === EditContentFormat.wikitext && title.startsWith("Template:")) ? minifyMediaWikiHTML(source) : source;
 
-        if (args.type === "create") {
+        if (args.editType === "create") {
           const callResult = await tools["create-page"].execute(
             {
               server,
@@ -199,7 +205,7 @@ function uiRequestEditPageTool(server: McpServer): RegisteredTool {
             source: sourceContent,
             title,
             comment,
-            section: section === "all" ? undefined : section,
+            section: section === "all" ? undefined : (section === "new" ? "new" : toNumber(section,undefined)),
             contentModel: model
           },
           {

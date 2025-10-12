@@ -8,7 +8,6 @@ import { ProjectOverview } from "./project-overview";
 import { Messages } from "./messages";
 import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
-import { getUserId, updateUserId } from "@/lib/user-id";
 import { useLocalStorage } from "@/lib/hooks/use-local-storage";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { convertToUIMessages } from "@/lib/chat-store";
@@ -35,11 +34,8 @@ import { Label } from "@radix-ui/react-label";
 import { Input } from "@/components/ui/input";
 import { InfoTable } from "./info-table";
 import { Button } from "./ui/button";
-import { extendWikiHTML } from "@/lib/context/html-util";
-import { randomUUID } from "crypto";
-import { UIMessage } from "ai";
-import { Progess } from "./ui/progress";
-import { SITE_SUFFIX, WIKIFRAM_ENDPOINT, SIGN_UP_URL } from "@/lib/constants";
+import { extendMarkHTML, extendWikiHTML } from "@/lib/context/html-util";
+import { SITE_SUFFIX, SIGN_UP_URL } from "@/lib/constants";
 import { parseWikiUrl } from "@/lib/common/utils";
 
 // Type for chat data from DB
@@ -55,7 +51,9 @@ async function generateFileName(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  const hashHex = hashArray
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
   const ext = file.name.split(".").pop()?.toLowerCase();
   return ext ? `${hashHex}.${ext}` : hashHex;
 }
@@ -92,7 +90,6 @@ export async function uploadImage(file: File) {
   return finalUrl;
 }
 
-
 export default function Chat() {
   const router = useRouter();
   const params = useParams();
@@ -103,18 +100,20 @@ export default function Chat() {
     "selectedModel",
     defaultModel
   );
-  const [userId, setUserId] = useState<string>("");
   const [generatedChatId, setGeneratedChatId] = useState<string>("");
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  // Login logic
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [username, setUsername] = useState(((typeof window !== 'undefined')&&localStorage.getItem("username"))||"");
-  const [password, setPassword] = useState(((typeof window !== 'undefined')&&localStorage.getItem("password"))||"");
-  const [loginError, setLoginError] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
+  const [refMark, setRefMark] = useState<string | null>(null);
+
+  const [showRefMark, setShowRefMark] = useState<{
+    server: string;
+    title: string;
+    source: string;
+    contentModel: string;
+    html: string | null;
+  } | null>(null);
 
   // Get MCP server data from context
   const {
@@ -127,62 +126,9 @@ export default function Chat() {
     setPendingEditPageToolCall,
     pendingEditPageHTML,
     setPendingEditPageHTML,
-    pubwikiCookies,
-    setPubwikiCookies
+    userStatus,
+    fetchWithAuth,
   } = useMCP();
-
-  const handleLogin = async () => {
-    setLoginLoading(true);
-    setLoginError("");
-
-    try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setLoginError(data.message || "登录失败");
-        return;
-      }
-
-      setPubwikiCookies(data.cookies);
-      const newUserId = data.userkey.trim()
-      const oldUserId = getUserId()
-
-      if(oldUserId!=newUserId){
-        updateUserId(newUserId);
-        setUserId(newUserId);
-        toast.success("User ID updated successfully");
-        // 发送自定义事件通知其他组件用户ID已更新
-        window.dispatchEvent(new CustomEvent('userIdUpdated', { detail: { newUserId } }));
-      }
-      localStorage.setItem("username",username)
-      localStorage.setItem("password",password)
-      setLoginOpen(false);
-    } catch (err) {
-      setLoginError("请求出错，请稍后再试");
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  // Initialize userId and check login status
-  useEffect(() => {
-    const currentUserId = getUserId();
-    setUserId(currentUserId);
-    
-    // Check if user needs to login
-    // If no username/password stored or no valid userId, show login
-    const storedUsername = typeof window !== 'undefined' ? localStorage.getItem("username") : null;
-    const storedPassword = typeof window !== 'undefined' ? localStorage.getItem("password") : null;
-    if(pubwikiCookies.length==0){
-      setLoginOpen(true);
-    }
-  }, []);
 
   // Generate a chat ID if needed
   useEffect(() => {
@@ -192,14 +138,58 @@ export default function Chat() {
   }, [chatId]);
 
   const setUIRequestResult = async (result: Record<string, string>) => {
-    await fetch("/api/edit/reply", {
+    await fetchWithAuth("/api/edit/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chatId: chatId || generatedChatId, result }),
     });
   };
 
-  const pendingChangePageAnnotations = useRef<{title:string,text:string}[]>([]);
+  const pendingChangePageAnnotations = useRef<
+    { title: string; text: string }[]
+  >([]);
+
+  const pendingSendRefMark = useRef<{
+    title: string;
+    text: string;
+    sectionId: string;
+  }>({ title: "", text: "", sectionId: "" });
+
+  const showReference = (args: {
+    title: string;
+    source: string;
+    server: string;
+    contentModel: string;
+  }) => {
+    console.log("Show reference called with:", args);
+    setShowRefMark({
+      title: args.title,
+      source: args.source,
+      server: args.server,
+      contentModel: args.contentModel,
+      html: null,
+    });
+    pendingSendRefMark.current.title = args.title;
+    fetch("/api/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wikitext: args.source,
+        server: parseWikiUrl(args.server),
+        contentModel: args.contentModel || "wikitext",
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setShowRefMark({
+          title: args.title,
+          source: args.source,
+          server: args.server,
+          contentModel: args.contentModel,
+          html: extendMarkHTML(data.html),
+        });
+      });
+  };
 
   // Use React Query to fetch chat history
   const {
@@ -207,12 +197,12 @@ export default function Chat() {
     isLoading: isLoadingChat,
     error,
   } = useQuery({
-    queryKey: ["chat", chatId, userId] as const,
+    queryKey: ["chat", chatId, userStatus?.username] as const,
     queryFn: async ({ queryKey }) => {
       const [_, chatId, userId] = queryKey;
       if (!chatId || !userId) return null;
 
-      const response = await fetch(`/api/chats/${chatId}`, {
+      const response = await fetchWithAuth(`/api/chats/${chatId}`, {
         headers: {
           "x-user-id": userId,
         },
@@ -233,7 +223,7 @@ export default function Chat() {
 
       return response.json() as Promise<ChatData>;
     },
-    enabled: !!chatId && !!userId,
+    enabled: !!chatId && !!userStatus?.username,
     retry: 1,
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchOnWindowFocus: false,
@@ -272,34 +262,46 @@ export default function Chat() {
     setCreateWikiStatus({
       ...createWikiStatus!,
       resultStatus: "in-progress",
-    })
-    const res = await fetch("/api/task/create", {
+    });
+    const res = await fetchWithAuth("/api/task/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({...args, reqcookie:pubwikiCookies.join("; ")}),
+      body: JSON.stringify({
+        ...args,
+        reqcookie: (userStatus?.pubwikiCookie ?? []).join("; "),
+      }),
     });
     const { taskId, error } = await res.json();
     const wikiUrl = `https://${args.slug}${SITE_SUFFIX}`;
     if (!taskId) {
-      toast.error(`Failed to create wiki on: ${wikiUrl}, no task ID returned: ${error}`);
+      toast.error(
+        `Failed to create wiki on: ${wikiUrl}, no task ID returned: ${error}`
+      );
       append({
         role: "user",
         content: `[PubwikiSystem] Failed to create wiki on: ${wikiUrl}, message: ${error}`,
       });
+      setCreateWikiStatus(undefined);
       return;
     }
-    const evtSource = new EventSource(`/api/task/${taskId}/status?reqcookie=${encodeURIComponent(pubwikiCookies.join("; "))}`);
+    const evtSource = new EventSource(
+      `/api/task/${taskId}/status?reqcookie=${encodeURIComponent(
+        (userStatus?.pubwikiCookie ?? []).join("; ")
+      )}`
+    );
     evtSource.addEventListener("status", (data) => {
       const e = JSON.parse(data.data) as CreateWikiSSEStatusMessage;
-      if(e.status!="succeeded"&&e.status!="failed"){
+      if (e.status != "succeeded" && e.status != "failed") {
         return;
       }
       append({
         role: "user",
-        content: `[PubwikiSystem] Create wiki finished on: ${wikiUrl}, message: ${JSON.stringify(e)}`,
+        content: `[PubwikiSystem] Create wiki finished on: ${wikiUrl}, message: ${JSON.stringify(
+          e
+        )}`,
       });
       evtSource.close();
-      setCreateWikiStatus(undefined)
+      setCreateWikiStatus(undefined);
     });
     evtSource.addEventListener("progress", (data) => {
       const e = JSON.parse(data.data) as CreateWikiSSEProgressMessage;
@@ -309,7 +311,7 @@ export default function Chat() {
         message: e.message,
         phase: e.phase,
         resultStatus: "in-progress",
-      })
+      });
     });
   };
 
@@ -321,7 +323,7 @@ export default function Chat() {
     append,
     status,
     stop,
-    setMessages
+    setMessages,
   } = useChat({
     id: chatId || generatedChatId, // Use generated ID if no chatId in URL
     initialMessages,
@@ -330,14 +332,19 @@ export default function Chat() {
       selectedModel,
       mcpServers: servers,
       chatId: chatId || generatedChatId, // Use generated ID if no chatId in URL
-      userId,
-      appendHeaders: { "reqcookie": pubwikiCookies.join("; ") }, // pass pubwiki cookies to backend API
+      userId: userStatus?.username || "", // Pass username as userId
+      appendHeaders: {
+        reqcookie: (userStatus?.pubwikiCookie ?? []).join("; "),
+      }, // pass pubwiki cookies to backend API
     },
     experimental_throttle: 100,
+    credentials: "include",
     onFinish: () => {
       // Invalidate the chats query to refresh the sidebar
-      if (userId) {
-        queryClient.invalidateQueries({ queryKey: ["chats", userId] });
+      if (userStatus?.username) {
+        queryClient.invalidateQueries({
+          queryKey: ["chats", userStatus.username],
+        });
       }
     },
     onToolCall: ({ toolCall }) => {
@@ -347,13 +354,17 @@ export default function Chat() {
       } else if (toolCall.toolName === "edit-page") {
         const args = toolCall.args as EditWikiPageArgs;
         setPendingEditPageToolCall({
-          type: "update",
+          type: args.editType,
           args,
         });
         fetch("/api/parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ wikitext: args.source, server: parseWikiUrl(args.server), contentModel: args.contentModel || "wikitext" }),
+          body: JSON.stringify({
+            wikitext: args.content,
+            server: parseWikiUrl(args.server),
+            contentModel: args.contentModel || "wikitext",
+          }),
         })
           .then((res) => res.json())
           .then((data) => {
@@ -365,7 +376,10 @@ export default function Chat() {
           );
       } else if (toolCall.toolName === "create-new-wiki-site") {
         const args = toolCall.args as CreateWikiArgs;
-        setCreateWikiStatus({args:args,resultStatus:"waiting-confirmation"})
+        setCreateWikiStatus({
+          args: args,
+          resultStatus: "waiting-confirmation",
+        });
       }
     },
     onError: (error) => {
@@ -383,49 +397,68 @@ export default function Chat() {
   const handleFormSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      let img_url = null as string|null;
-      if (imageFile){
-        try{
-            setUploading(true);
-            img_url = await uploadImage(imageFile)
-            console.log("Image uploaded to:", img_url);
-        }catch(err){
+      let img_url = null as string | null;
+      if (imageFile) {
+        try {
+          setUploading(true);
+          img_url = await uploadImage(imageFile);
+          console.log("Image uploaded to:", img_url);
+        } catch (err) {
           toast.error(`Image upload failed: ${err}, please try again.`);
           return;
         }
         setImageFile(null);
+        setRefMark(null);
         setUploading(false);
       }
 
-      
       if (img_url) {
-        setMessages(messages.concat([
-          {
-            id: crypto.randomUUID(),
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: `[PubwikiSystem] User uploaded an image: [image](${img_url}).
+        setMessages(
+          messages.concat([
+            {
+              id: crypto.randomUUID(),
+              role: "user",
+              parts: [
+                {
+                  type: "text",
+                  text: `[PubwikiSystem] User uploaded an image: [image](${img_url}).
                  Do NOT guess its content, should ask the user which wiki page to add it to.
                  Note: when user answered, then use 'upload-image' tool to upload the image to the wiki site, and use 'edit-page' tool to add the image to the page.
-                 Thumbnail preview: ![thumbnail](${img_url})  `  
-              }
-            ],
-            content:``
-          }
-        ]))
+                 Thumbnail preview: ![thumbnail](${img_url})  `,
+                },
+              ],
+              content: ``,
+            },
+          ])
+        );
       }
 
+      if (pendingSendRefMark.current && refMark) {
+        setMessages(
+          messages.concat([
+            {
+              id: crypto.randomUUID(),
+              role: "user",
+              parts: [
+                {
+                  type: "text",
+                  text: `[PubwikiSystem] User added a reference mark for Page [${pendingSendRefMark.current.title}] Section [${pendingSendRefMark.current.sectionId}] : ${refMark}.`,
+                },
+              ],
+              content: ``,
+            },
+          ])
+        );
+      }
 
       if (!chatId && generatedChatId && input.trim()) {
         // If this is a new conversation, redirect to the chat page with the generated ID
         const effectiveChatId = generatedChatId;
         // Submit the form
-        handleSubmit(e,{
-          body:{
+        handleSubmit(e, {
+          body: {
             //appendParts
-          }
+          },
         });
         // Redirect to the chat page with the generated ID
         router.push(`/chat/${effectiveChatId}`);
@@ -433,9 +466,9 @@ export default function Chat() {
         setUserOptions([]);
         // Normal submission for existing chats
         handleSubmit(e, {
-          body:{
+          body: {
             //appendParts
-          }
+          },
         });
       }
     },
@@ -445,7 +478,16 @@ export default function Chat() {
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.data?.type === "ANNOTATION_ADDED") {
-        pendingChangePageAnnotations.current.push({ text: event.data.text, title: event.data.sectionTitle })
+        pendingChangePageAnnotations.current.push({
+          text: event.data.text,
+          title: event.data.sectionTitle,
+        });
+      }
+      if (event.data?.type === "RERMARK_ADD") {
+        pendingSendRefMark.current.text = event.data.text;
+        pendingSendRefMark.current.sectionId = event.data.sectionId;
+        setRefMark(event.data.text);
+        setShowRefMark(null);
       }
     }
 
@@ -467,66 +509,6 @@ export default function Chat() {
   const isLoading =
     status === "streaming" || status === "submitted" || isLoadingChat;
 
-  // Show login dialog if not logged in
-  if (loginOpen) {
-    return (
-      <>
-        <Dialog
-          open={loginOpen}
-          onOpenChange={(open) => {
-            setLoginOpen(open);
-            if (!open) {
-              setUsername("");
-              setPassword("");
-              setLoginError("");
-            }
-          }}
-        >
-          <DialogContent className="sm:max-w-[400px]"
-            onInteractOutside={(e) => e.preventDefault()}
-            onEscapeKeyDown={(e) => e.preventDefault()}>
-            <DialogHeader>
-              <DialogTitle>Login</DialogTitle>
-              <DialogDescription>
-                Please enter your credentials to access your account. <a className="text-blue-500 hover:underline" href={SIGN_UP_URL}>SIGN UP a new account</a>
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                />
-              </div>
-
-              {loginError && (
-                <p className="text-sm text-red-500 font-medium">{loginError}</p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button onClick={handleLogin} disabled={loginLoading}>
-                {loginLoading ? "Logging in..." : "Login"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </>
-    );
-  }
-
   return (
     <div className="h-dvh flex flex-col justify-center w-full max-w-[430px] sm:max-w-3xl mx-auto px-4 sm:px-6 py-3">
       {messages.length === 0 && !isLoadingChat ? (
@@ -544,6 +526,8 @@ export default function Chat() {
               imageFile={imageFile}
               setImageFile={setImageFile}
               isUploading={uploading}
+              refMark={refMark}
+              setRefMark={setRefMark}
             />
           </form>
         </div>
@@ -554,9 +538,10 @@ export default function Chat() {
               messages={messages}
               isLoading={isLoading}
               status={status}
+              showRefCallback={showReference}
             />
           </div>
-          {userOptions && (
+          {userOptions && userOptions.length > 0 && (
             <div className="h-10 flex gap-2">
               {userOptions.map((o) => (
                 <GlassButton
@@ -580,6 +565,8 @@ export default function Chat() {
               imageFile={imageFile}
               setImageFile={setImageFile}
               isUploading={uploading}
+              refMark={refMark}
+              setRefMark={setRefMark}
             />
           </form>
         </>
@@ -614,41 +601,47 @@ export default function Chat() {
                     </span>,
                   ],
                 },
-                { label: "Wiki Language", value: createWikiStatus.args.language },
+                {
+                  label: "Wiki Language",
+                  value: createWikiStatus.args.language,
+                },
               ]}
               className="mt-4"
             />
 
             <div className="mt-4 flex flex-col gap-8">
               <span className="text-md text-foreground font-bold">
-                Creating status: {createWikiStatus.status} - phase: {createWikiStatus.phase}
+                Creating status: {createWikiStatus.status} - phase:{" "}
+                {createWikiStatus.phase}
               </span>
               {/* <Progress value={12}></Progress> */}
             </div>
             {createWikiStatus.resultStatus === "waiting-confirmation" && (
-            <DialogFooter className="mt-4">
-              <Button
-                onClick={()=>{
-                  streamCreateWiki(createWikiStatus.args);
-                }
-              }>Confirm</Button>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  append({
-                    role: "user",
-                    content: `[PubwikiSystem] User cancelled wiki creation, you can ask why and what to change if needed.`,
-                  });
-                  setCreateWikiStatus(undefined);
-                }}
-              >
-                Cancel
-              </Button>
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-    )}
+              <DialogFooter className="mt-4">
+                <Button
+                  onClick={() => {
+                    streamCreateWiki(createWikiStatus.args);
+                  }}
+                >
+                  Confirm
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    append({
+                      role: "user",
+                      content: `[PubwikiSystem] User cancelled wiki creation, you can ask why and what to change if needed.`,
+                    });
+                    setCreateWikiStatus(undefined);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </DialogFooter>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Dialog open={!!pendingEditPageToolCall}>
         <DialogContent
@@ -663,7 +656,9 @@ export default function Chat() {
                 : "Update Page"}
             </DialogTitle>
             <DialogDescription>
-              Please review the details below before proceeding. You can annotate for section, annotation will not be saved but use as reference for the AI to regenerate the content.
+              Please review the details below before proceeding. You can
+              annotate for section, annotation will not be saved but use as
+              reference for the AI to regenerate the content.
             </DialogDescription>
           </DialogHeader>
 
@@ -693,7 +688,11 @@ export default function Chat() {
                 if (pendingEditPageToolCall) {
                   setUIRequestResult({
                     confirm: "false",
-                    content: "User rejected the change. And adviced to regenerate. User annotations: " + pendingChangePageAnnotations.current.map(v=>`[${v.title}] ${v.text}`).join("; "),
+                    content:
+                      "User rejected the change. And adviced to regenerate. User annotations: " +
+                      pendingChangePageAnnotations.current
+                        .map((v) => `[Section:${v.title}] ${v.text}`)
+                        .join("; "),
                   });
                   pendingChangePageAnnotations.current = [];
                   setPendingEditPageToolCall(null);
@@ -733,6 +732,41 @@ export default function Chat() {
               }}
             >
               Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!showRefMark}>
+        <DialogContent
+          className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Mark Reference</DialogTitle>
+            <DialogDescription>
+              Mark something and use these as reference for the AI to regenerate
+              the content.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="font-semibold">Preview</Label>
+              <iframe
+                className="w-full h-[300px] min-h-[40vh] border rounded-md"
+                srcDoc={`${showRefMark?.html ?? "<p>Rendering preview...</p>"}`}
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowRefMark(null);
+              }}
+            >
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

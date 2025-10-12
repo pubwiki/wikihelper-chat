@@ -8,13 +8,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing wikitext" }, { status: 400 });
     }
 
-    const response = await fetch(`${server}api.php?action=parse&format=json`, {
+    const response = await fetch(`${server}api.php?action=parse&format=json&preview=true&disableeditsection=true`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        wikitext: wikitext,
+        text: wikitext,
         contentmodel: contentModel || "wikitext",
       }),
     });
