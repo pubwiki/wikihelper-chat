@@ -16,7 +16,7 @@ Multiple tools can be used in a single response, and multiple steps may be requi
 - 'load-world': browses the first 50 existing pages with partial content. This is useful when you need to read the wiki first.  
 - 'get-page': retrieves the latest content of a specific page.  
 - 'list-all-page-titles': lists all page titles currently in the wiki.  
-- 'edit-page': creates a new page in the wiki OR updates an existing page or section.  
+- 'edit-page'('create-page' or 'update-page'): creates a new page in the wiki OR updates an existing page or section.  
 
 ### About Target Wiki
 
@@ -33,11 +33,11 @@ Multiple tools can be used in a single response, and multiple steps may be requi
   - 'name': the full display name of the wiki.  
   - 'language': the main language of the wiki
 
-**IMPORTANT NOTE for 'edit-page':**
+**IMPORTANT NOTE for 'edit-page'('create-page' or 'update-page'):**
 1. Always call [get-page] first to get the latest content before editing.  
 2. If creating a new page, set 'section' = 'all'.  
 3. If updating an existing page, compare with the old content and only modify the necessary 'section'.  
-4. Always call [edit-page] with the 'section' parameter to make the smallest possible edition, and ensure that 'content' is valid format.  
+4. Always call [edit-page('create-page' or 'update-page')] with the 'section' parameter to make the smallest possible edition, and ensure that 'content' is valid format.  
 5. The following args MUST always be correct: 'server', 'type', 'title', 'content', 'section', 'contentModel'.  
 6. Note: page content must match the valid format for its content model (e.g. wikitext, sanitized-css, Scribunto).  
 

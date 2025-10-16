@@ -114,6 +114,15 @@ export type UserStatus = {
 
 export type UserOptionBtn = { title: string; action: string };
 
+export type TargetWikiStatus = {
+  name: string;
+  url: string;
+  slug: string;
+  isPublic: boolean;
+  createByUser: boolean;
+};
+
+
 interface MCPContextType {
   mcpServers: MCPServer[];
   setMcpServers: (servers: MCPServer[]) => void;
@@ -152,6 +161,8 @@ interface MCPContextType {
     input: RequestInfo | URL,
     init?: RequestInit
   ) => Promise<Response>;
+  targetWikiStatus?: TargetWikiStatus;
+  fetchTargetWikiStatus?: (url: string) => void;
 }
 
 const MCPContext = createContext<MCPContextType | undefined>(undefined);
@@ -211,6 +222,7 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
   const [userStatus, setUserStatus] = useState<UserStatus | undefined>(
     undefined
   );
+  const [targetWikiStatus, setTargetWikiStatus] = useState<TargetWikiStatus | undefined>(undefined);
   const [userOptions, setUserOptions] = useState<UserOptionBtn[]>([]);
   const [createWikiStatus, setCreateWikiStatus] = useState<
     CreateWikiStatus | undefined
@@ -407,6 +419,10 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
     init();
   }, [mcpServers]);
 
+  const fetchTargetWikiStatus = async (url: string) => {
+
+  }
+
   return (
     <MCPContext.Provider
       value={{
@@ -431,7 +447,9 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
         setPendingEditPageHTML,
         presetOptions,
         setPresetOptions,
-        fetchWithAuth
+        fetchWithAuth,
+        targetWikiStatus,
+        fetchTargetWikiStatus
       }}
     >
       {children}

@@ -15,7 +15,6 @@ export const Messages = ({
   showRefCallback: ((args: { title: string; source: string, server: string, contentModel: string }) => void) | undefined;
 }) => {
   const [containerRef, endRef] = useScrollToBottom();
-  console.log("Rendering Messages with:", { messages, isLoading, status });
   return (
     <div className="h-full overflow-y-auto no-scrollbar" ref={containerRef}>
       <div className="max-w-lg sm:max-w-3xl mx-auto py-4">

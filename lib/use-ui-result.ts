@@ -5,69 +5,92 @@ interface StoredResult {
   expireAt: number;
 }
 
-class UseUIResult {
+class UIResultBridge {
   private results = new Map<string, StoredResult>();
   private emitter = new EventEmitter();
   private cleanupInterval: NodeJS.Timeout;
 
   constructor(private ttlMs = 10 * 60 * 1000, private sweepMs = 60 * 1000) {
+    // 定期清理过期数据
     this.cleanupInterval = setInterval(() => this.sweep(), this.sweepMs);
   }
 
-  setResult(chatId: string, result: any) {
-    const expireAt = Date.now() + this.ttlMs;
-    this.results.set(chatId, { value: result, expireAt });
-    this.emitter.emit(chatId, result);
+  /**
+   * 生成唯一键（chatId + taskName）
+   */
+  private key(chatId: string, taskName?: string) {
+    return taskName ? `${chatId}:${taskName}` : chatId;
   }
 
-  async getResult(chatId: string, timeoutMs = 30000): Promise<any> {
-    const stored = this.results.get(chatId);
+  /**
+   * 存储结果并触发等待中的 Promise
+   */
+  setResult(chatId: string, result: any, taskName?: string) {
+    const key = this.key(chatId, taskName);
+    const expireAt = Date.now() + this.ttlMs;
+    this.results.set(key, { value: result, expireAt });
+    this.emitter.emit(key, result);
+  }
+
+  /**
+   * 获取结果（如果不存在则等待）
+   */
+  async getResult(chatId: string, taskName?: string, timeoutMs = 30000): Promise<any> {
+    const key = this.key(chatId, taskName);
+    const stored = this.results.get(key);
+
     if (stored) {
-      this.results.delete(chatId);
+      this.results.delete(key);
       return stored.value;
     }
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.emitter.removeAllListeners(chatId);
-        reject(new Error("Timeout waiting for UI result"));
+        this.emitter.removeAllListeners(key);
+        reject(new Error(`Timeout waiting for UI result (task: ${taskName ?? "default"})`));
       }, timeoutMs);
 
-      this.emitter.once(chatId, (value) => {
+      this.emitter.once(key, (value) => {
         clearTimeout(timeout);
-        this.results.delete(chatId);
+        this.results.delete(key);
         resolve(value);
       });
 
-      // 👇 二次检查，避免 race condition
-      const existing = this.results.get(chatId);
+      // 👇 二次检查（防止 race condition）
+      const existing = this.results.get(key);
       if (existing) {
-        this.emitter.emit(chatId, existing.value);
+        this.emitter.emit(key, existing.value);
       }
     });
   }
 
+  /**
+   * 清理过期结果
+   */
   private sweep() {
     const now = Date.now();
-    for (const [chatId, stored] of this.results.entries()) {
+    for (const [key, stored] of this.results.entries()) {
       if (stored.expireAt <= now) {
-        this.results.delete(chatId);
+        this.results.delete(key);
       }
     }
   }
 
+  /**
+   * 停止清理定时器
+   */
   stop() {
     clearInterval(this.cleanupInterval);
   }
 }
 
 /**
- * 🔑 确保全局单例（避免 API Route / MCP Server import 出现多个实例）
+ * 🔑 全局单例，防止在多个模块或 Worker 中重复实例化
  */
 declare global {
   // eslint-disable-next-line no-var
-  var __useUIResult: UseUIResult | undefined;
+  var __uiResultBridge: UIResultBridge | undefined;
 }
 
-export const useUIResult =
-  global.__useUIResult ?? (global.__useUIResult = new UseUIResult());
+export const uiResultBridge =
+  global.__uiResultBridge ?? (global.__uiResultBridge = new UIResultBridge());

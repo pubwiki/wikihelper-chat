@@ -37,6 +37,7 @@ import { Button } from "./ui/button";
 import { extendMarkHTML, extendWikiHTML } from "@/lib/context/html-util";
 import { SITE_SUFFIX, SIGN_UP_URL } from "@/lib/constants";
 import { parseWikiUrl } from "@/lib/common/utils";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
 
 // Type for chat data from DB
 interface ChatData {
@@ -137,11 +138,18 @@ export default function Chat() {
     }
   }, [chatId]);
 
-  const setUIRequestResult = async (result: Record<string, string>) => {
-    await fetchWithAuth("/api/edit/reply", {
+  const setUIResult = async (
+    result: Record<string, string>,
+    taskName: string
+  ) => {
+    await fetchWithAuth("/ui/result", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chatId: chatId || generatedChatId, result }),
+      body: JSON.stringify({
+        chatId: chatId || generatedChatId,
+        result,
+        taskName,
+      }),
     });
   };
 
@@ -393,6 +401,20 @@ export default function Chat() {
     },
   });
 
+  let targetWikiUrl = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    for (const p of msg.parts) {
+      if (
+        p.type === "tool-invocation" &&
+        p.toolInvocation?.toolName === "set-target-wiki"
+      ) {
+        targetWikiUrl = p.toolInvocation.args.url ?? null;
+        break;
+      }
+    }
+  }
+  targetWikiUrl = "123"
   // Custom submit handler
   const handleFormSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -533,6 +555,14 @@ export default function Chat() {
         </div>
       ) : (
         <>
+          {targetWikiUrl && (
+            <div className="w-full flex justify-center sticky top-0 z-10">
+              <div className="w-full flex items-center font-bold bg-transparent border-2 border-border/60 shadow-none px-4 h-10 dark:border-input dark:bg-input/50 rounded-md text-sm transition-all">
+                <span className=" mr-4">{`Target Wiki: ${targetWikiUrl}`}</span>
+                <Button variant="default" size="xs">Change to Public</Button>
+              </div>
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto min-h-0 pb-2">
             <Messages
               messages={messages}
@@ -686,14 +716,17 @@ export default function Chat() {
             <Button
               onClick={() => {
                 if (pendingEditPageToolCall) {
-                  setUIRequestResult({
-                    confirm: "false",
-                    content:
-                      "User rejected the change. And adviced to regenerate. User annotations: " +
-                      pendingChangePageAnnotations.current
-                        .map((v) => `[Section:${v.title}] ${v.text}`)
-                        .join("; "),
-                  });
+                  setUIResult(
+                    {
+                      confirm: "false",
+                      content:
+                        "User rejected the change. And adviced to regenerate. User annotations: " +
+                        pendingChangePageAnnotations.current
+                          .map((v) => `[Section:${v.title}] ${v.text}`)
+                          .join("; "),
+                    },
+                    "edit-page"
+                  );
                   pendingChangePageAnnotations.current = [];
                   setPendingEditPageToolCall(null);
                   setPendingEditPageHTML("Rendering preview...");
@@ -705,10 +738,13 @@ export default function Chat() {
             <Button
               onClick={() => {
                 if (pendingEditPageToolCall) {
-                  setUIRequestResult({
-                    confirm: "true",
-                    content: "User confirmed the change.",
-                  });
+                  setUIResult(
+                    {
+                      confirm: "true",
+                      content: "User confirmed the change.",
+                    },
+                    "edit-page"
+                  );
                   pendingChangePageAnnotations.current = [];
                   setPendingEditPageToolCall(null);
                   setPendingEditPageHTML("Rendering preview...");
@@ -721,10 +757,13 @@ export default function Chat() {
               variant="secondary"
               onClick={() => {
                 if (pendingEditPageToolCall) {
-                  setUIRequestResult({
-                    confirm: "false",
-                    content: "User rejected the change.",
-                  });
+                  setUIResult(
+                    {
+                      confirm: "false",
+                      content: "User rejected the change.",
+                    },
+                    "edit-page"
+                  );
                   pendingChangePageAnnotations.current = [];
                   setPendingEditPageToolCall(null);
                   setPendingEditPageHTML("Rendering preview...");
