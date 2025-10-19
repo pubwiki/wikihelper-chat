@@ -555,7 +555,7 @@ export default function Chat() {
         </div>
       ) : (
         <>
-          {targetWikiUrl && (
+          {targetWikiUrl && false && (
             <div className="w-full flex justify-center sticky top-0 z-10">
               <div className="w-full flex items-center font-bold bg-transparent border-2 border-border/60 shadow-none px-4 h-10 dark:border-input dark:bg-input/50 rounded-md text-sm transition-all">
                 <span className=" mr-4">{`Target Wiki: ${targetWikiUrl}`}</span>

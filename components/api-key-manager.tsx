@@ -12,111 +12,58 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-// API key configuration
-interface ApiKeyConfig {
-  name: string;
-  key: string;
-  storageKey: string;
-  label: string;
-  placeholder: string;
-}
-
-// Available API keys configuration
-const API_KEYS_CONFIG: ApiKeyConfig[] = [
-  {
-    name: "OpenAI",
-    key: "openai",
-    storageKey: "OPENAI_API_KEY",
-    label: "OpenAI API Key",
-    placeholder: "sk-...",
-  },
-  {
-    name: "Anthropic",
-    key: "anthropic",
-    storageKey: "ANTHROPIC_API_KEY",
-    label: "Anthropic API Key",
-    placeholder: "sk-ant-...",
-  },
-  {
-    name: "Groq",
-    key: "groq",
-    storageKey: "GROQ_API_KEY",
-    label: "Groq API Key",
-    placeholder: "gsk_...",
-  },
-  {
-    name: "XAI",
-    key: "xai",
-    storageKey: "XAI_API_KEY",
-    label: "XAI API Key",
-    placeholder: "xai-...",
-  },
-];
-
 interface ApiKeyManagerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function ApiKeyManager({ open, onOpenChange }: ApiKeyManagerProps) {
-  // State to store API keys
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [apiKey, setApiKey] = useState("");
+  const [endpoint, setEndpoint] = useState("");
 
-  // Load API keys from localStorage on initial mount
+  // Load values from localStorage on mount
   useEffect(() => {
-    const storedKeys: Record<string, string> = {};
+    const storedKey = localStorage.getItem("OPENAI_API_KEY");
+    const storedEndpoint = localStorage.getItem("OPENAI_API_ENDPOINT");
 
-    API_KEYS_CONFIG.forEach((config) => {
-      const value = localStorage.getItem(config.storageKey);
-      if (value) {
-        storedKeys[config.key] = value;
-      }
-    });
-
-    setApiKeys(storedKeys);
+    if (storedKey) setApiKey(storedKey);
+    if (storedEndpoint) setEndpoint(storedEndpoint);
   }, []);
 
-  // Update API key in state
-  const handleApiKeyChange = (key: string, value: string) => {
-    setApiKeys((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
-
-  // Save API keys to localStorage
-  const handleSaveApiKeys = () => {
+  // Save API key and endpoint to localStorage
+  const handleSave = () => {
     try {
-      API_KEYS_CONFIG.forEach((config) => {
-        const value = apiKeys[config.key];
+      if (apiKey.trim()) {
+        localStorage.setItem("OPENAI_API_KEY", apiKey.trim());
+      } else {
+        localStorage.removeItem("OPENAI_API_KEY");
+      }
 
-        if (value && value.trim()) {
-          localStorage.setItem(config.storageKey, value.trim());
-        } else {
-          localStorage.removeItem(config.storageKey);
-        }
-      });
+      if (endpoint.trim()) {
+        localStorage.setItem("OPENAI_API_ENDPOINT", endpoint.trim());
+      } else {
+        localStorage.removeItem("OPENAI_API_ENDPOINT");
+      }
 
-      toast.success("API keys saved successfully");
+      toast.success("Settings saved successfully");
       onOpenChange(false);
     } catch (error) {
-      console.error("Error saving API keys:", error);
-      toast.error("Failed to save API keys");
+      console.error("Error saving settings:", error);
+      toast.error("Failed to save settings");
     }
   };
 
-  // Clear all API keys
-  const handleClearApiKeys = () => {
+  // Clear all values
+  const handleClear = () => {
     try {
-      API_KEYS_CONFIG.forEach((config) => {
-        localStorage.removeItem(config.storageKey);
-      });
-
-      setApiKeys({});
-      toast.success("All API keys cleared");
+      localStorage.removeItem("OPENAI_API_KEY");
+      localStorage.removeItem("OPENAI_API_ENDPOINT");
+      setApiKey("");
+      setEndpoint("");
+      toast.success("Settings cleared");
     } catch (error) {
-      console.error("Error clearing API keys:", error);
-      toast.error("Failed to clear API keys");
+      console.error("Error clearing settings:", error);
+      toast.error("Failed to clear settings");
     }
   };
 
@@ -124,37 +71,45 @@ export function ApiKeyManager({ open, onOpenChange }: ApiKeyManagerProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>API Key Settings</DialogTitle>
+          <DialogTitle>API Settings</DialogTitle>
           <DialogDescription>
-            Enter your own API keys for different AI providers. Keys are stored
-            securely in your browser&apos;s local storage.
+            Configure OpenAI-compatible API Key and Endpoint. Settings will be saved in your browser&apos;s local storage.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          {API_KEYS_CONFIG.map((config) => (
-            <div key={config.key} className="grid gap-2">
-              <Label htmlFor={config.key}>{config.label}</Label>
-              <Input
-                id={config.key}
-                type="password"
-                value={apiKeys[config.key] || ""}
-                onChange={(e) => handleApiKeyChange(config.key, e.target.value)}
-                placeholder={config.placeholder}
-              />
-            </div>
-          ))}
+          <div className="grid gap-2">
+            <Label htmlFor="apiKey">API Key</Label>
+            <Input
+              id="apiKey"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-..."
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="endpoint">API Endpoint</Label>
+            <Input
+              id="endpoint"
+              type="text"
+              value={endpoint}
+              onChange={(e) => setEndpoint(e.target.value)}
+              placeholder="https://api.openai.com/v1"
+            />
+          </div>
         </div>
 
         <DialogFooter className="flex justify-between sm:justify-between">
-          <Button variant="destructive" onClick={handleClearApiKeys}>
-            Clear All Keys
+          <Button variant="destructive" onClick={handleClear}>
+            Clear Settings
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveApiKeys}>Save Keys</Button>
+            <Button onClick={handleSave}>Save</Button>
           </div>
         </DialogFooter>
       </DialogContent>

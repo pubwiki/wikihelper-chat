@@ -17,58 +17,47 @@ export interface ModelInfo {
 
 const qwenClient = createQwen({
   apiKey: process.env.DASHSCOPE_API_KEY,
-  baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-});
-
-const openaiClient = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL:"https://api.yesapikey.com/v1"
-})
-
-const deepSeekClient = createDeepSeek({
-  apiKey: process.env.DEEPSEEK_API_KEY,
+  baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
 });
 
 const geminiClient = createOpenAICompatible({
   name:"gemini",
   apiKey: process.env.GEMINI_API_KEY,
-  baseURL:"http://andaoapi.top/v1"
+  baseURL:"https://openrouter.ai/api/v1"
+})
+
+const claudeClient = createOpenAICompatible({
+  name:"claude",
+  apiKey: process.env.CLAUDE_API_KEY,
+  baseURL:"https://openrouter.ai/api/v1"
 })
 
 const languageModels = {
-  "qwen-plus": qwenClient('qwen-plus-latest'),
-  "gpt-5": openaiClient('gpt-5-2025-08-07'),
-  "deepseek": deepSeekClient('deepseek-chat'),
-  "gemini-2.5-pro": geminiClient('gemini-2.5-pro')
+  "qwen3-max": qwenClient('qwen-max'),
+  "gemini-2.5-pro": geminiClient('google/gemini-2.5-pro'),
+  "claude-4.5": claudeClient('anthropic/claude-sonnet-4.5'),
 };
 
 export const modelDetails: Record<keyof typeof languageModels, ModelInfo> = {
-  "deepseek": {
-    provider: "DeepSeek",
-    name: "DeepSeek",
-    description: "DeepSeek's advanced language model optimized for chat applications, providing high-quality responses with a focus on understanding context and user intent.",
-    apiVersion: "deepseek-v3.2-exp",
-    capabilities: ["Balanced", "Efficient", "Agentic"]
-  },
-  "qwen-plus": {
-    provider: "Alibaba",
-    name: "Qwen-Plus",
+  "qwen3-max": {
+    provider: "Ali",
+    name: "Qwen3-Max",
     description: "The balanced model of the Qwen series, offering a good compromise between speed and performance, with a context length of one million tokens.",
-    apiVersion: "qwen-plus",
+    apiVersion: "qwen3-max",
     capabilities: ["Balanced", "Efficient", "Agentic"]
-  },
-  "gpt-5": {
-    provider: "OpenAI",
-    name: "GPT-5",
-    description: "The latest GPT-5 model released by OpenAI, featuring stronger comprehension and generation abilities, suitable for a wide range of complex tasks.",
-    apiVersion: "gpt-5-2025-08-07",
-    capabilities: ["Advanced", "Versatile", "Agentic"]
   },
   "gemini-2.5-pro": {
-    provider: "Gemini",
+    provider: "Google",
     name: "Gemini-2.5-Pro",
     description: "Gemini's advanced language model optimized for chat applications, providing high-quality responses with a focus on understanding context and user intent.",
     apiVersion: "gemini-2.5-pro",
+    capabilities: ["Balanced", "Efficient", "Agentic"]
+  },
+  "claude-4.5": {
+    provider: "Anthropic",
+    name: "Claude 4.5", 
+    description: "Claude 4.5 is a state-of-the-art language model from Anthropic, designed for safety and usability.",
+    apiVersion: "claude-4-5",
     capabilities: ["Balanced", "Efficient", "Agentic"]
   }
 };
@@ -91,4 +80,4 @@ export type modelID = keyof typeof languageModels;
 
 export const MODELS = Object.keys(languageModels);
 
-export const defaultModel: modelID = "deepseek";
+export const defaultModel: modelID = "gemini-2.5-pro";

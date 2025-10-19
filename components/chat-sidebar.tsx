@@ -11,7 +11,7 @@ import {
   Sparkles,
   ChevronsUpDown,
   Copy,
-  Pencil,
+  Download,
   Github,
   Key,
 } from "lucide-react";
@@ -75,7 +75,7 @@ export function ChatSidebar() {
 
 
   // Use TanStack Query to fetch chats
-  const { chats, isLoading, deleteChat } = useChats(userStatus?.username||"");
+  const { chats, isLoading, deleteChat } = useChats(userStatus?.username || "");
 
 
   // Start a new chat
@@ -112,9 +112,8 @@ export function ChatSidebar() {
       .map((_, index) => (
         <SidebarMenuItem key={`skeleton-${index}`}>
           <div
-            className={`flex items-center gap-2 px-3 py-2 ${
-              isCollapsed ? "justify-center" : ""
-            }`}
+            className={`flex items-center gap-2 px-3 py-2 ${isCollapsed ? "justify-center" : ""
+              }`}
           >
             <Skeleton className="h-4 w-4 rounded-full" />
             {!isCollapsed && (
@@ -136,14 +135,12 @@ export function ChatSidebar() {
       <SidebarHeader className="p-4 border-b border-border/40">
         <div className="flex items-center justify-start">
           <div
-            className={`flex items-center gap-2 ${
-              isCollapsed ? "justify-center w-full" : ""
-            }`}
+            className={`flex items-center gap-2 ${isCollapsed ? "justify-center w-full" : ""
+              }`}
           >
             <div
-              className={`relative rounded-full bg-primary/70 flex items-center justify-center ${
-                isCollapsed ? "size-5 p-3" : "size-6"
-              }`}
+              className={`relative rounded-full bg-primary/70 flex items-center justify-center ${isCollapsed ? "size-5 p-3" : "size-6"
+                }`}
             >
               <Image
                 src="/scira.png"
@@ -185,9 +182,8 @@ export function ChatSidebar() {
                 renderChatSkeletons()
               ) : chats.length === 0 ? (
                 <div
-                  className={`flex items-center justify-center py-3 ${
-                    isCollapsed ? "" : "px-4"
-                  }`}
+                  className={`flex items-center justify-center py-3 ${isCollapsed ? "" : "px-4"
+                    }`}
                 >
                   {isCollapsed ? (
                     <div className="flex h-6 w-6 items-center justify-center rounded-md border border-border/50 bg-background/50">
@@ -417,12 +413,53 @@ export function ChatSidebar() {
                 <DropdownMenuItem
                   onSelect={(e) => {
                     e.preventDefault();
-                    navigator.clipboard.writeText(userStatus?.username||"");
+                    navigator.clipboard.writeText(userStatus?.username || "");
                     toast.success("User ID copied to clipboard");
                   }}
                 >
                   <Copy className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
                   Copy User ID
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    const cookies = userStatus?.pubwikiCookie;
+                    if (!cookies) {
+                      toast.error("No cookies found");
+                      return;
+                    }
+                    const coookiesStr = cookies.join("; ");
+                    const json = JSON.stringify({
+                      "servers": {
+                        "wikihelper": {
+                          "type": "http",
+                          "url": "https://mcp.pub.wiki/mcp",
+                          "headers": { "reqcookie": coookiesStr }
+                        }
+                      }
+                    }, null, 2);
+                    
+                    // 创建 Blob 对象
+                    const blob = new Blob([json], { type: "application/json" });
+                    // 创建下载链接
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = "mcp.json";
+                    // 触发下载
+                    document.body.appendChild(link);
+                    link.click();
+                    // 清理
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    
+                    toast.success("MCP configuration downloaded");
+                  }}
+                >
+                  <Download className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
+                  Download MCP Json
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
@@ -436,7 +473,7 @@ export function ChatSidebar() {
                   <Settings className="mr-2 h-4 w-4 hover:text-sidebar-accent" />
                   MCP Settings
                 </DropdownMenuItem>
-                {false && (
+                {(
                   <>
                     <DropdownMenuItem
                       onSelect={(e) => {
