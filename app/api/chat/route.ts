@@ -1,4 +1,4 @@
-import { model, type modelID } from "@/ai/providers";
+import { type modelID } from "@/ai/providers";
 import { Message, smoothStream, streamText, type UIMessage } from "ai";
 import { appendResponseMessages } from 'ai';
 import { saveChat, saveMessages, convertToDBMessages } from '@/lib/chat-store';
@@ -8,6 +8,8 @@ import { chats } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { initializeMCPClients, type MCPServerConfig } from '@/lib/mcp-client';
 import { generateTitle } from '@/app/actions';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { customProvider } from 'ai';
 
 import { SYSTEM_PROMPT } from "@/lib/prompt";
 
@@ -74,6 +76,9 @@ export async function POST(req: Request) {
     mcpServers = [],
     appendHeaders = {},
     appendParts = [],
+    apiKey,
+    apiEndpoint,
+    modelId,
   }: {
     messages: UIMessage[];
     chatId?: string;
@@ -82,6 +87,9 @@ export async function POST(req: Request) {
     mcpServers?: MCPServerConfig[];
     appendHeaders?: Record<string, string>;
     appendParts?: UIMessageParts;
+    apiKey?: string;
+    apiEndpoint?: string;
+    modelId?: string;
   } = reqJson;
 
   if (!userId) {
@@ -90,6 +98,27 @@ export async function POST(req: Request) {
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
+
+  // Validate API configuration
+  if (!apiKey || !apiEndpoint || !modelId) {
+    return new Response(
+      JSON.stringify({ error: "API configuration (apiKey, apiEndpoint, modelId) is required" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Create dynamic model client from frontend configuration
+  const userClient = createOpenAICompatible({
+    name: "user-model",
+    apiKey: apiKey,
+    baseURL: apiEndpoint
+  });
+
+  const dynamicModel = customProvider({
+    languageModels: {
+      "user-model": userClient(modelId),
+    },
+  });
 
   const id = chatId || nanoid();
 
@@ -160,7 +189,7 @@ export async function POST(req: Request) {
   const finalMessages = checkAndSimplifyMessages(sanitizedMessages);
 
   const result = streamText({
-    model: model.languageModel(selectedModel),
+    model: dynamicModel.languageModel("user-model"),
     system: SYSTEM_PROMPT,
     messages: finalMessages,
     tools,

@@ -8,7 +8,7 @@ import type {
   TextContent,
   ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
-import { uiResultBridge } from "./use-ui-result";
+import { clientUIResultManager } from "./client-ui-result";
 import { randomUUID } from "crypto";
 import { buildWikiHelperTools } from "./built-in-wikihelper-client";
 
@@ -155,7 +155,7 @@ function uiRequestEditPageTool(server: McpServer): RegisteredTool {
         console.log(
           `Waiting for user confirmation on page change...chatId: ${chatId}`
         );
-        const result = await uiResultBridge.getResult(chatId, "edit-page", 300000);
+        const result = await clientUIResultManager.getResult(chatId, "edit-page", 300000);
 
         const baseContent = [
           {

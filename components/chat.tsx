@@ -38,6 +38,7 @@ import { extendMarkHTML, extendWikiHTML } from "@/lib/context/html-util";
 import { SITE_SUFFIX, SIGN_UP_URL } from "@/lib/constants";
 import { parseWikiUrl } from "@/lib/common/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { clientUIResultManager } from "@/lib/client-ui-result";
 
 // Type for chat data from DB
 interface ChatData {
@@ -138,19 +139,12 @@ export default function Chat() {
     }
   }, [chatId]);
 
-  const setUIResult = async (
+  // Use client-side UI result manager instead of backend API
+  const setUIResult = (
     result: Record<string, string>,
     taskName: string
   ) => {
-    await fetchWithAuth("/ui/result", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chatId: chatId || generatedChatId,
-        result,
-        taskName,
-      }),
-    });
+    clientUIResultManager.setResult(chatId || generatedChatId, result, taskName);
   };
 
   const pendingChangePageAnnotations = useRef<
@@ -344,6 +338,10 @@ export default function Chat() {
       appendHeaders: {
         reqcookie: (userStatus?.pubwikiCookie ?? []).join("; "),
       }, // pass pubwiki cookies to backend API
+      // Pass API configuration from localStorage to backend
+      apiKey: typeof window !== 'undefined' ? localStorage.getItem('OPENAI_API_KEY') : '',
+      apiEndpoint: typeof window !== 'undefined' ? (localStorage.getItem('OPENAI_API_ENDPOINT') || 'https://api.openai.com/v1') : 'https://api.openai.com/v1',
+      modelId: typeof window !== 'undefined' ? (localStorage.getItem('OPENAI_MODEL_ID') || 'gpt-4o') : 'gpt-4o',
     },
     experimental_throttle: 100,
     credentials: "include",
