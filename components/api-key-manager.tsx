@@ -20,14 +20,17 @@ interface ApiKeyManagerProps {
 export function ApiKeyManager({ open, onOpenChange }: ApiKeyManagerProps) {
   const [apiKey, setApiKey] = useState("");
   const [endpoint, setEndpoint] = useState("");
+  const [modelId, setModelId] = useState("");
 
   // Load values from localStorage on mount
   useEffect(() => {
     const storedKey = localStorage.getItem("OPENAI_API_KEY");
     const storedEndpoint = localStorage.getItem("OPENAI_API_ENDPOINT");
+    const storedModelId = localStorage.getItem("OPENAI_MODEL_ID");
 
     if (storedKey) setApiKey(storedKey);
     if (storedEndpoint) setEndpoint(storedEndpoint);
+    if (storedModelId) setModelId(storedModelId);
   }, []);
 
   // Save API key and endpoint to localStorage
@@ -45,6 +48,12 @@ export function ApiKeyManager({ open, onOpenChange }: ApiKeyManagerProps) {
         localStorage.removeItem("OPENAI_API_ENDPOINT");
       }
 
+      if (modelId.trim()) {
+        localStorage.setItem("OPENAI_MODEL_ID", modelId.trim());
+      } else {
+        localStorage.removeItem("OPENAI_MODEL_ID");
+      }
+
       toast.success("Settings saved successfully");
       onOpenChange(false);
     } catch (error) {
@@ -58,8 +67,10 @@ export function ApiKeyManager({ open, onOpenChange }: ApiKeyManagerProps) {
     try {
       localStorage.removeItem("OPENAI_API_KEY");
       localStorage.removeItem("OPENAI_API_ENDPOINT");
+      localStorage.removeItem("OPENAI_MODEL_ID");
       setApiKey("");
       setEndpoint("");
+      setModelId("");
       toast.success("Settings cleared");
     } catch (error) {
       console.error("Error clearing settings:", error);
@@ -97,6 +108,17 @@ export function ApiKeyManager({ open, onOpenChange }: ApiKeyManagerProps) {
               value={endpoint}
               onChange={(e) => setEndpoint(e.target.value)}
               placeholder="https://api.openai.com/v1"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="modelId">Model ID</Label>
+            <Input
+              id="modelId"
+              type="text"
+              value={modelId}
+              onChange={(e) => setModelId(e.target.value)}
+              placeholder="gpt-4o"
             />
           </div>
         </div>
