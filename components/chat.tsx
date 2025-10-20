@@ -383,6 +383,21 @@ export default function Chat() {
     },
   });
 
+  // Handle routing for new chats - only redirect after the response is complete
+  const hasRedirectedRef = useRef(false);
+  useEffect(() => {
+    // Only redirect if:
+    // 1. We don't have a chatId in the URL (!chatId)
+    // 2. We have a frontend chat ID (frontendChatId)
+    // 3. The chat is no longer new (response has been saved)
+    // 4. We haven't redirected yet
+    // 5. We have messages
+    if (!chatId && frontendChatId && !isFrontendNewChat && !hasRedirectedRef.current && messages.length > 0) {
+      hasRedirectedRef.current = true;
+      router.push(`/chat/${frontendChatId}`);
+    }
+  }, [chatId, frontendChatId, isFrontendNewChat, messages.length, router]);
+
   let targetWikiUrl = null;
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
@@ -455,28 +470,16 @@ export default function Chat() {
         );
       }
 
-      if (!chatId && generatedChatId && input.trim()) {
-        // If this is a new conversation, redirect to the chat page with the generated ID
-        const effectiveChatId = generatedChatId;
-        // Submit the form
-        handleSubmit(e, {
-          body: {
-            //appendParts
-          },
-        });
-        // Redirect to the chat page with the generated ID
-        router.push(`/chat/${effectiveChatId}`);
-      } else {
-        setUserOptions([]);
-        // Normal submission for existing chats
-        handleSubmit(e, {
-          body: {
-            //appendParts
-          },
-        });
-      }
+      // For new chats, just submit normally
+      // The routing will be handled by the useEffect above after the response is complete
+      setUserOptions([]);
+      handleSubmit(e, {
+        body: {
+          //appendParts
+        },
+      });
     },
-    [chatId, generatedChatId, input, handleSubmit, router]
+    [imageFile, messages, refMark, handleSubmit, setMessages]
   );
 
   useEffect(() => {

@@ -154,7 +154,6 @@ const PurePreviewMessage = ({
   const shouldShowCopyButton =
     message.role === "assistant" &&
     (!isLatestMessage || status !== "streaming");
-
   return (
     <div
       className={cn(
@@ -262,6 +261,8 @@ export const Message = memo(PurePreviewMessage, (prevProps, nextProps) => {
   if (prevProps.message.annotations !== nextProps.message.annotations)
     return false;
   if (prevProps.message.id !== nextProps.message.id) return false;
+  // Check updatedAt to detect streaming updates
+  if ((prevProps.message as any).updatedAt !== (nextProps.message as any).updatedAt) return false;
   if (!equal(prevProps.message.parts, nextProps.message.parts)) return false;
   return true;
 });

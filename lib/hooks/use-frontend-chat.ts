@@ -40,6 +40,7 @@ export type UIMessage = {
   content: string;
   parts: MessagePart[];
   createdAt?: Date;
+  updatedAt?: number; // Timestamp for forcing re-renders during streaming
 };
 
 interface UseFrontendChatOptions {
@@ -244,10 +245,11 @@ export function useFrontendChat(options: UseFrontendChatOptions) {
           // Update message in real-time
           setMessages(prev => {
             const newMessages = [...prev];
-            const lastMessage = newMessages[newMessages.length - 1];
+            const lastMessageIndex = newMessages.length - 1;
+            const lastMessage = newMessages[lastMessageIndex];
+            
             if (lastMessage.id === assistantMessageId) {
-              lastMessage.content = fullText;
-              // Update parts
+              // Create new parts array
               const parts: MessagePart[] = [];
               if (fullText) {
                 parts.push({ type: 'text', text: fullText });
@@ -258,7 +260,14 @@ export function useFrontendChat(options: UseFrontendChatOptions) {
                   toolInvocation: inv,
                 });
               });
-              lastMessage.parts = parts;
+              
+              // Create a NEW message object instead of mutating
+              newMessages[lastMessageIndex] = {
+                ...lastMessage,
+                content: fullText,
+                parts,
+                updatedAt: Date.now(), // Force re-render
+              };
             }
             return newMessages;
           });
@@ -280,7 +289,9 @@ export function useFrontendChat(options: UseFrontendChatOptions) {
           // Update message
           setMessages(prev => {
             const newMessages = [...prev];
-            const lastMessage = newMessages[newMessages.length - 1];
+            const lastMessageIndex = newMessages.length - 1;
+            const lastMessage = newMessages[lastMessageIndex];
+            
             if (lastMessage.id === assistantMessageId) {
               const parts: MessagePart[] = [];
               if (fullText) {
@@ -292,7 +303,13 @@ export function useFrontendChat(options: UseFrontendChatOptions) {
                   toolInvocation: inv,
                 });
               });
-              lastMessage.parts = parts;
+              
+              // Create new message object
+              newMessages[lastMessageIndex] = {
+                ...lastMessage,
+                parts,
+                updatedAt: Date.now(),
+              };
             }
             return newMessages;
           });
@@ -306,7 +323,9 @@ export function useFrontendChat(options: UseFrontendChatOptions) {
             // Update message
             setMessages(prev => {
               const newMessages = [...prev];
-              const lastMessage = newMessages[newMessages.length - 1];
+              const lastMessageIndex = newMessages.length - 1;
+              const lastMessage = newMessages[lastMessageIndex];
+              
               if (lastMessage.id === assistantMessageId) {
                 const parts: MessagePart[] = [];
                 if (fullText) {
@@ -318,7 +337,13 @@ export function useFrontendChat(options: UseFrontendChatOptions) {
                     toolInvocation: inv,
                   });
                 });
-                lastMessage.parts = parts;
+                
+                // Create new message object
+                newMessages[lastMessageIndex] = {
+                  ...lastMessage,
+                  parts,
+                  updatedAt: Date.now(),
+                };
               }
               return newMessages;
             });
