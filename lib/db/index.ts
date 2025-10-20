@@ -1,11 +1,6 @@
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { Pool } from "@neondatabase/serverless";
-import * as schema from "./schema";
+/**
+ * Database client - now uses PGlite with IndexedDB for pure frontend operation
+ */
 
-// Initialize the connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
-
-// Initialize Drizzle with the connection pool and schema
-export const db = drizzle(pool, { schema }); 
+// Always use PGlite in the new frontend-only architecture
+export { db, getDb, getPGliteClient, clearDatabase, exportDatabase, importDatabase } from './pglite-client'; 

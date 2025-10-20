@@ -38,14 +38,16 @@ export async function saveMessages({
   try {
     if (dbMessages.length > 0) {
       const chatId = dbMessages[0].chatId;
+      const { getDb } = await import('./db');
+      const database = await getDb();
 
       // First delete any existing messages for this chat
-      await db
+      await database
         .delete(messages)
         .where(eq(messages.chatId, chatId));
 
       // Then insert the new messages
-      return await db.insert(messages).values(dbMessages);
+      return await database.insert(messages).values(dbMessages);
     }
     return null;
   } catch (error) {
@@ -193,7 +195,10 @@ export async function saveChat({ id, userId, messages: aiMessages, title }: Save
   }
 
   // Check if chat already exists
-  const existingChat = await db.query.chats.findFirst({
+  const { getDb } = await import('./db');
+  const database = await getDb();
+  
+  const existingChat = await database.query.chats.findFirst({
     where: and(
       eq(chats.id, chatId),
       eq(chats.userId, userId)
@@ -202,7 +207,7 @@ export async function saveChat({ id, userId, messages: aiMessages, title }: Save
 
   if (existingChat) {
     // Update existing chat
-    await db
+    await database
       .update(chats)
       .set({
         title: chatTitle,
@@ -214,7 +219,7 @@ export async function saveChat({ id, userId, messages: aiMessages, title }: Save
       ));
   } else {
     // Create new chat
-    await db.insert(chats).values({
+    await database.insert(chats).values({
       id: chatId,
       userId,
       title: chatTitle,
@@ -241,7 +246,9 @@ export function getTextContent(message: Message): string {
 }
 
 export async function getChats(userId: string) {
-  return await db.query.chats.findMany({
+  const { getDb } = await import('./db');
+  const database = await getDb();
+  return await database.query.chats.findMany({
     where: eq(chats.userId, userId),
     orderBy: [desc(chats.updatedAt)]
   });
@@ -249,7 +256,10 @@ export async function getChats(userId: string) {
 
 export async function getChatById(id: string, userId: string): Promise<ChatWithMessages | null> {
   console.log("Fetching chat:", {id, userId});
-  const chat = await db.query.chats.findFirst({
+  const { getDb } = await import('./db');
+  const database = await getDb();
+  
+  const chat = await database.query.chats.findFirst({
     where: and(
       eq(chats.id, id),
       eq(chats.userId, userId)
@@ -258,7 +268,7 @@ export async function getChatById(id: string, userId: string): Promise<ChatWithM
 
   if (!chat) return null;
 
-  const chatMessages = await db.query.messages.findMany({
+  const chatMessages = await database.query.messages.findMany({
     where: eq(messages.chatId, id),
     orderBy: [messages.createdAt]
   });
@@ -270,7 +280,9 @@ export async function getChatById(id: string, userId: string): Promise<ChatWithM
 }
 
 export async function deleteChat(id: string, userId: string) {
-  await db.delete(chats).where(
+  const { getDb } = await import('./db');
+  const database = await getDb();
+  await database.delete(chats).where(
     and(
       eq(chats.id, id),
       eq(chats.userId, userId)

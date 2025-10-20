@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { type Chat } from '@/lib/db/schema';
 import { toast } from 'sonner';
+import { getChats, deleteChat as deleteChatFromDb } from '@/lib/chat-store';
 
 export function useChats(userName: string) {
   const queryClient = useQueryClient();
 
-  // Main query to fetch chats
+  // Main query to fetch chats - now directly from IndexedDB
   const {
     data: chats = [],
     isLoading,
@@ -14,39 +15,21 @@ export function useChats(userName: string) {
   } = useQuery<Chat[]>({
     queryKey: ['chats', userName],
     queryFn: async () => {
-      if (userName=="") return [];
+      if (userName === "") return [];
 
-      const response = await fetch('/api/chats', {
-        headers: {
-          'x-user-id': userName
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch chats');
-      }
-
-      return response.json();
+      // Directly query the local database (IndexedDB via PGlite)
+      return await getChats(userName);
     },
     enabled: !!userName, // Only run query if userId exists
     staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
     refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 
-  // Mutation to delete a chat
+  // Mutation to delete a chat - now directly from IndexedDB
   const deleteChat = useMutation({
     mutationFn: async (chatId: string) => {
-      const response = await fetch(`/api/chats/${chatId}`, {
-        method: 'DELETE',
-        headers: {
-          'x-user-id': userName
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete chat');
-      }
-
+      // Directly delete from local database
+      await deleteChatFromDb(chatId, userName);
       return chatId;
     },
     onSuccess: (deletedChatId) => {

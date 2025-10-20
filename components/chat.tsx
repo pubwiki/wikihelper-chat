@@ -1,7 +1,6 @@
 "use client";
 
 import { defaultModel, type modelID } from "@/ai/providers";
-import { Message, useChat } from "@ai-sdk/react";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Textarea } from "./textarea";
 import { ProjectOverview } from "./project-overview";
@@ -31,7 +30,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@radix-ui/react-label";
-import { Input } from "@/components/ui/input";
 import { InfoTable } from "./info-table";
 import { Button } from "./ui/button";
 import { extendMarkHTML, extendWikiHTML } from "@/lib/context/html-util";
@@ -39,6 +37,7 @@ import { SITE_SUFFIX, SIGN_UP_URL } from "@/lib/constants";
 import { parseWikiUrl } from "@/lib/common/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { clientUIResultManager } from "@/lib/client-ui-result";
+import { useFrontendChat, type UIMessage } from "@/lib/hooks/use-frontend-chat";
 
 // Type for chat data from DB
 interface ChatData {
@@ -117,6 +116,14 @@ export default function Chat() {
     html: string | null;
   } | null>(null);
 
+  // Helper function to create a UIMessage
+  const createUserMessage = (content: string): UIMessage => ({
+    id: nanoid(),
+    role: 'user',
+    content,
+    parts: [{ type: 'text', text: content }],
+  });
+
   // Get MCP server data from context
   const {
     getActiveServersForApi,
@@ -193,7 +200,7 @@ export default function Chat() {
       });
   };
 
-  // Use React Query to fetch chat history
+  // Use React Query to fetch chat history - now from IndexedDB
   const {
     data: chatData,
     isLoading: isLoadingChat,
@@ -204,26 +211,25 @@ export default function Chat() {
       const [_, chatId, userId] = queryKey;
       if (!chatId || !userId) return null;
 
-      const response = await fetchWithAuth(`/api/chats/${chatId}`, {
-        headers: {
-          "x-user-id": userId,
-        },
-      });
+      // Directly query IndexedDB via PGlite
+      const { getChatById } = await import('@/lib/chat-store');
+      const chat = await getChatById(chatId, userId);
 
-      if (!response.ok) {
-        // For 404, return empty chat data instead of throwing
-        if (response.status === 404) {
-          return {
-            id: chatId,
-            messages: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        throw new Error("Failed to load chat");
+      if (!chat) {
+        // Return empty chat data if not found
+        return {
+          id: chatId,
+          messages: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
       }
 
-      return response.json() as Promise<ChatData>;
+      return {
+        ...chat,
+        createdAt: chat.createdAt.toISOString(),
+        updatedAt: chat.updatedAt.toISOString(),
+      } as ChatData;
     },
     enabled: !!chatId && !!userStatus?.username,
     retry: 1,
@@ -245,17 +251,8 @@ export default function Chat() {
       return [];
     }
 
-    // Convert DB messages to UI format, then ensure it matches the Message type from @ai-sdk/react
-    const uiMessages = convertToUIMessages(chatData.messages);
-    return uiMessages.map(
-      (msg) =>
-        ({
-          id: msg.id,
-          role: msg.role as Message["role"], // Ensure role is properly typed
-          content: msg.content,
-          parts: msg.parts,
-        } as Message)
-    );
+    // Convert DB messages to UI format
+    return convertToUIMessages(chatData.messages) as UIMessage[];
   }, [chatData]);
 
   const servers = getActiveServersForApi();
@@ -279,10 +276,9 @@ export default function Chat() {
       toast.error(
         `Failed to create wiki on: ${wikiUrl}, no task ID returned: ${error}`
       );
-      append({
-        role: "user",
-        content: `[PubwikiSystem] Failed to create wiki on: ${wikiUrl}, message: ${error}`,
-      });
+      append(createUserMessage(
+        `[PubwikiSystem] Failed to create wiki on: ${wikiUrl}, message: ${error}`
+      ));
       setCreateWikiStatus(undefined);
       return;
     }
@@ -296,12 +292,9 @@ export default function Chat() {
       if (e.status != "succeeded" && e.status != "failed") {
         return;
       }
-      append({
-        role: "user",
-        content: `[PubwikiSystem] Create wiki finished on: ${wikiUrl}, message: ${JSON.stringify(
-          e
-        )}`,
-      });
+      append(createUserMessage(
+        `[PubwikiSystem] Create wiki finished on: ${wikiUrl}, message: ${JSON.stringify(e)}`
+      ));
       evtSource.close();
       setCreateWikiStatus(undefined);
     });
@@ -326,25 +319,16 @@ export default function Chat() {
     status,
     stop,
     setMessages,
-  } = useChat({
-    id: chatId || generatedChatId, // Use generated ID if no chatId in URL
+    isNewChat: isFrontendNewChat,
+    chatId: frontendChatId,
+  } = useFrontendChat({
+    id: chatId,
     initialMessages,
-    maxSteps: 50,
-    body: {
-      selectedModel,
-      mcpServers: servers,
-      chatId: chatId || generatedChatId, // Use generated ID if no chatId in URL
-      userId: userStatus?.username || "", // Pass username as userId
-      appendHeaders: {
-        reqcookie: (userStatus?.pubwikiCookie ?? []).join("; "),
-      }, // pass pubwiki cookies to backend API
-      // Pass API configuration from localStorage to backend
-      apiKey: typeof window !== 'undefined' ? localStorage.getItem('OPENAI_API_KEY') : '',
-      apiEndpoint: typeof window !== 'undefined' ? (localStorage.getItem('OPENAI_API_ENDPOINT') || 'https://api.openai.com/v1') : 'https://api.openai.com/v1',
-      modelId: typeof window !== 'undefined' ? (localStorage.getItem('OPENAI_MODEL_ID') || 'gpt-4o') : 'gpt-4o',
+    mcpServers: servers,
+    appendHeaders: {
+      reqcookie: (userStatus?.pubwikiCookie ?? []).join("; "),
     },
-    experimental_throttle: 100,
-    credentials: "include",
+    userId: userStatus?.username || "",
     onFinish: () => {
       // Invalidate the chats query to refresh the sidebar
       if (userStatus?.username) {
@@ -353,23 +337,23 @@ export default function Chat() {
         });
       }
     },
-    onToolCall: ({ toolCall }) => {
-      if (toolCall.toolName === "ui-show-options") {
-        const args = (toolCall.args as any)["options"] as UserOptionBtn[];
-        setUserOptions(args);
-      } else if (toolCall.toolName === "edit-page") {
-        const args = toolCall.args as EditWikiPageArgs;
+    onToolCall: ({ toolName, args }: { toolName: string; args: any }) => {
+      if (toolName === "ui-show-options") {
+        const options = (args as any)["options"] as UserOptionBtn[];
+        setUserOptions(options);
+      } else if (toolName === "edit-page") {
+        const editArgs = args as EditWikiPageArgs;
         setPendingEditPageToolCall({
-          type: args.editType,
-          args,
+          type: editArgs.editType,
+          args: editArgs,
         });
         fetch("/api/parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            wikitext: args.content,
-            server: parseWikiUrl(args.server),
-            contentModel: args.contentModel || "wikitext",
+            wikitext: editArgs.content,
+            server: parseWikiUrl(editArgs.server),
+            contentModel: editArgs.contentModel || "wikitext",
           }),
         })
           .then((res) => res.json())
@@ -380,20 +364,20 @@ export default function Chat() {
           .catch(() =>
             setPendingEditPageHTML("<p>Error rendering preview</p>")
           );
-      } else if (toolCall.toolName === "create-new-wiki-site") {
-        const args = toolCall.args as CreateWikiArgs;
+      } else if (toolName === "create-new-wiki-site") {
+        const createArgs = args as CreateWikiArgs;
         setCreateWikiStatus({
-          args: args,
+          args: createArgs,
           resultStatus: "waiting-confirmation",
         });
       }
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.log(error);
       toast.error(
         error.message.length > 0
-          ? "Error on UseChat:" + error.message
-          : "An error occured, please try again later.",
+          ? "Error: " + error.message
+          : "An error occurred, please try again later.",
         { position: "top-center", richColors: true }
       );
     },
@@ -519,10 +503,9 @@ export default function Chat() {
     if (isLoading) {
       return;
     }
-    append({
-      role: "user",
-      content: `[PubwikiSystem] Click Action Button: ${o.title}, action: ${o.action}`,
-    });
+    append(createUserMessage(
+      `[PubwikiSystem] Click Action Button: ${o.title}, action: ${o.action}`
+    ));
     setUserOptions([]);
   };
 
@@ -656,10 +639,9 @@ export default function Chat() {
                 <Button
                   variant="secondary"
                   onClick={() => {
-                    append({
-                      role: "user",
-                      content: `[PubwikiSystem] User cancelled wiki creation, you can ask why and what to change if needed.`,
-                    });
+                    append(createUserMessage(
+                      `[PubwikiSystem] User cancelled wiki creation, you can ask why and what to change if needed.`
+                    ));
                     setCreateWikiStatus(undefined);
                   }}
                 >
